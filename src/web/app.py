@@ -306,6 +306,20 @@ def api_job(jid: str) -> dict:
     return j
 
 
+@app.get("/api/klipr/health")
+def api_klipr_health() -> dict:
+    """Ping klipr; UI uses this to show a red/green status pill."""
+    import httpx
+    base = load_config().get("klipr", {}).get("base_url", "https://klipr.in/api/batch")
+    # klipr serves /api/health at the app root, not under /batch.
+    health_url = base.replace("/api/batch", "/api/health")
+    try:
+        r = httpx.get(health_url, timeout=5)
+        return {"ok": r.status_code == 200, "status": r.status_code, "url": health_url}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "error": str(e)[:120], "url": health_url}
+
+
 @app.get("/api/youtube/accounts")
 def api_youtube_accounts() -> dict:
     return {"accounts": yt_accounts.list_accounts()}

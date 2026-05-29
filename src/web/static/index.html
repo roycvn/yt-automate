@@ -63,6 +63,7 @@
 <header>
   <div class="logo">yta <b>studio</b></div>
   <div class="tag">generate · brand · publish — any channel, any niche</div>
+  <span id="kliprPill" class="pill" style="margin-left:14px">klipr: checking…</span>
 </header>
 <main>
 
@@ -297,7 +298,11 @@ $('upload').onclick=async()=>{$('upload').disabled=true;
       '<a class=dl style="color:var(--acc2)" href="'+res.youtube_url+'" target=_blank>'+res.youtube_url+'</a>';}
   catch(e){fail($('uploadStep'),e.message);}$('upload').disabled=false;};
 
-initChannels();loadAccounts();
+async function refreshKlipr(){try{const d=await(await fetch('/api/klipr/health')).json();
+  const p=$('kliprPill');p.textContent='klipr '+(d.ok?'✓ online':'✗ offline');
+  p.className='pill '+(d.ok?'ok':'');p.style.background=d.ok?'rgba(61,220,151,.15)':'rgba(255,77,109,.18)';
+  p.style.color=d.ok?'var(--ok)':'var(--acc)';}catch{}}
+initChannels();loadAccounts();refreshKlipr();setInterval(refreshKlipr,30000);
 </script>
 </body>
 </html>
