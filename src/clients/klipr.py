@@ -129,22 +129,34 @@ class KliprClient:
         return b""
 
     async def upload_file(self, path: Path) -> str:
-        """Upload a local file to klipr; returns a 1h signed URL.
-        Mime is inferred from extension because the reels-output bucket only
-        accepts allow-listed types (video/mp4, video/webm)."""
+        """Upload a local file to klipr; returns a 1h signed download URL.
+
+        Uses klipr's presigned-URL mode: yta asks klipr for an upload URL,
+        then PUTs the bytes directly to Supabase. This bypasses Vercel's
+        per-function body-size cap (so videos of any size work)."""
         import mimetypes
         p = Path(path)
         mime = mimetypes.guess_type(p.name)[0] or "video/mp4"
 
-        async def call() -> httpx.Response:
-            async with httpx.AsyncClient(timeout=180) as http:
-                with open(p, "rb") as fh:
-                    return await http.post(f"{self.base_url}/upload",
-                                            headers=self._headers,
-                                            files={"file": (p.name, fh, mime)})
-        r = await _retry_net(call, label="klipr upload")
+        async def presign() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=30) as http:
+                return await http.post(f"{self.base_url}/upload",
+                                        headers={**self._headers,
+                                                 "Content-Type": "application/json"},
+                                        json={"filename": p.name})
+        r = await _retry_net(presign, label="klipr upload presign")
         self._raise_for(r)
-        return r.json()["signed_url"]
+        urls = r.json()
+
+        async def put_bytes() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=600) as http:
+                with open(p, "rb") as fh:
+                    return await http.put(urls["signed_upload_url"], content=fh.read(),
+                                          headers={"Content-Type": mime, "x-upsert": "true"})
+        up = await _retry_net(put_bytes, label="supabase upload")
+        if up.status_code >= 400:
+            raise KliprError(f"supabase upload PUT -> {up.status_code}: {up.text[:200]}")
+        return urls["signed_url"]
 
     # ------------------------------------------------------------------ script
     async def generate_script(self, channel: dict, topic: str | None = None,
