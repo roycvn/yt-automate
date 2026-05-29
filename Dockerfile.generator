@@ -1,0 +1,19 @@
+# yta GENERATION worker — produces full original videos end to end.
+# Unlike the light cron (Dockerfile), this needs ffmpeg for assembly.
+FROM python:3.12-slim
+
+# ffmpeg for scene assembly / intro-outro / drone / overlays.
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY . .
+
+# Produces one video (script->images->voice->assemble->captions->thumbnail->
+# SEO->upload). Railway runs it on a cron schedule. Captions/dub are delegated
+# to the klipr API; ffmpeg here only does local assembly.
+CMD ["python", "-m", "src.produce"]
