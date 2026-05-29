@@ -41,6 +41,11 @@ class YouTubeClient:
         )
         return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
+    def set_thumbnail(self, video_id: str, image_path) -> None:
+        from googleapiclient.http import MediaFileUpload
+        media = MediaFileUpload(str(image_path), mimetype="image/png")
+        self._service().thumbnails().set(videoId=video_id, media_body=media).execute()
+
     def upload_from_file(self, path, title: str, description: str = "",
                          tags: list[str] | None = None,
                          privacy: Literal["private", "unlisted", "public"] = "private",

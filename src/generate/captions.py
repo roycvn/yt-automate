@@ -20,7 +20,7 @@ WrapStyle: 0
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Caption,Noto Sans Devanagari,64,&H00FFFFFF,&H00000000,&H64000000,1,0,1,3,2,2,80,80,90,1
-Style: Title,Noto Sans Devanagari,96,&H0000E5FF,&H00000000,&H64000000,1,0,1,4,3,5,80,80,80,1
+Style: Title,Noto Sans Devanagari,120,&H0000D7FF,&H00101010,&H96000000,1,0,1,6,5,5,80,80,80,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -52,8 +52,9 @@ def build_ass(scenes: list, audio_paths: list[Path], *,
               intro_title: str, outro_text: str) -> str:
     """Compose the full ASS. Body scenes are offset by intro_s; outro at the end."""
     events: list[str] = []
-    # Intro title card.
-    events.append(_event(0.2, max(intro_s - 0.2, 0.6), "Title", intro_title))
+    # Intro title card — fade in/out + slow scale-up for a cinematic reveal.
+    intro_fx = r"{\fad(600,500)\t(0,2400,\fscx118\fscy118)}"
+    events.append(_event(0.2, max(intro_s - 0.2, 0.6), "Title", intro_fx + intro_title))
 
     # Scene captions, split per sentence proportionally across each scene's audio.
     t = intro_s
@@ -69,5 +70,5 @@ def build_ass(scenes: list, audio_paths: list[Path], *,
         t += dur
 
     # Outro CTA.
-    events.append(_event(t + 0.2, t + outro_s, "Title", outro_text))
+    events.append(_event(t + 0.2, t + outro_s, "Title", r"{\fad(500,400)}" + outro_text))
     return ASS_HEADER + "\n".join(events) + "\n"

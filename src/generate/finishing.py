@@ -12,6 +12,18 @@ from pathlib import Path
 
 from .assemble import assemble
 from .captions import build_ass, wav_duration
+from .images import generate_image
+
+INTRO_BG_PROMPT = (
+    "Cinematic 2D animated horror title-card background, pitch-dark eerie "
+    "atmosphere, swirling fog, faint blood-red moonlight, ominous silhouettes "
+    "in the distance, heavy vignette, lots of empty dark space in the center "
+    "for a title, no text, dramatic, film-grain"
+)
+OUTRO_BG_PROMPT = (
+    "Cinematic 2D animated horror end-card background, dark misty graveyard at "
+    "night, dim glow, empty center space for text, no text, eerie, vignette"
+)
 
 FPS = 30
 W, H = 1920, 1080
@@ -24,8 +36,27 @@ def _run(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True, capture_output=True)
 
 
-def _card(out: Path, dur: float) -> Path:
-    """A dark, silent video card of length `dur` (text burned later via ASS)."""
+def _card(out: Path, dur: float, image: Path | None = None) -> Path:
+    """A silent video card of length `dur`. With `image`, a cinematic slow-zoom
+    over the artwork; otherwise a flat dark background. Title text is burned
+    later via ASS."""
+    frames = int(dur * FPS)
+    if image is not None:
+        vf = (
+            f"scale={W*2}:{H*2},"
+            f"zoompan=z='min(zoom+0.0010,1.15)':d={frames}:"
+            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={W}x{H}:fps={FPS},"
+            f"format=yuv420p"
+        )
+        _run([
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-loop", "1", "-i", str(image),
+            "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+            "-vf", vf, "-t", f"{dur}",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+            "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", str(out),
+        ])
+        return out
     _run([
         "ffmpeg", "-y", "-loglevel", "error",
         "-f", "lavfi", "-i", f"color=c={BG}:s={W}x{H}:r={FPS}:d={dur}",
@@ -94,8 +125,11 @@ def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path]
     ASS text to burn on it. Returns (video_path, ass_text)."""
     work.mkdir(parents=True, exist_ok=True)
     body = assemble(images, audios, work / "body.mp4", work / "body_work", W, H)
-    intro = _card(work / "intro.mp4", INTRO_S)
-    outro = _card(work / "outro.mp4", OUTRO_S)
+    # Cinematic title/end cards from dedicated Flux backgrounds (slow zoom).
+    intro_bg = generate_image(INTRO_BG_PROMPT, work / "intro_bg.png", aspect_ratio="16:9")
+    outro_bg = generate_image(OUTRO_BG_PROMPT, work / "outro_bg.png", aspect_ratio="16:9")
+    intro = _card(work / "intro.mp4", INTRO_S, image=intro_bg)
+    outro = _card(work / "outro.mp4", OUTRO_S, image=outro_bg)
     joined = _concat([intro, body, outro], work / "joined.mp4")
 
     body_dur = sum(max(wav_duration(a), 1.0) for a in audios)
