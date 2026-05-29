@@ -87,6 +87,9 @@
       <input id="tone" class="sp" type="text" placeholder="Tone — e.g. 'suspenseful, eerie, chilling'" />
       <input id="artStyle" class="sp" type="text" placeholder="Art style — e.g. '2D animated horror, moonlight, heavy shadows'" />
       <input id="outro" class="sp" type="text" placeholder="Outro / subscribe text" />
+      <p class="hint sp">Channel logo (bottom-right) — upload a transparent PNG to override the default:</p>
+      <input id="logoFile" type="file" accept="image/png,image/*" />
+      <p class="hint">“Made with Klipr” stays top-right on every video.</p>
     </div>
   </div>
 
@@ -117,9 +120,16 @@
 
   <div class="card">
     <h2><span class="badge">3</span> Generate video</h2>
+    <label class="mut" style="display:block;margin-bottom:10px">
+      <input type="checkbox" id="makeShorts"> Also create a 9:16 Short (hook reframe)</label>
     <button id="genVideo" disabled>🎬 Generate audio + video</button>
     <div id="videoStep" class="step"></div>
     <video id="player" class="hidden" controls></video>
+    <div id="shortWrap" class="hidden sp">
+      <p class="hint">Short (9:16):</p>
+      <video id="shortPlayer" controls style="max-width:300px;border-radius:12px;border:1px solid var(--line)"></video>
+      <div class="sp"><a id="shortDl" class="dl" download><button class="ghost">⬇ Download Short</button></a></div>
+    </div>
   </div>
 
   <div class="card">
@@ -206,12 +216,16 @@ $('genVideo').onclick=async()=>{try{script=JSON.parse($('scriptView').value);}ca
   $('genVideo').disabled=true;$('player').classList.add('hidden');
   const fd=new FormData();fd.append('script',JSON.stringify(script));fd.append('music_mode',musicMode());
   fd.append('music_intensity',$('intensity').value);fd.append('channel',JSON.stringify(buildChannel()));
+  fd.append('make_shorts',$('makeShorts').checked);
   if(musicMode()==='upload'&&$('musicFile').files[0])fd.append('music_file',$('musicFile').files[0]);
+  if($('logoFile').files[0])fd.append('logo_file',$('logoFile').files[0]);
   try{const{job_id}=await(await fetch('/api/generate',{method:'POST',body:fd})).json();
     const res=await poll(job_id,s=>running($('videoStep'),s));work=res.work;ok($('videoStep'),'video ready');
     $('player').src=res.video_url+'?t='+Date.now();$('player').classList.remove('hidden');
     $('genThumb').disabled=false;$('upload').disabled=false;
-    $('download').href='/api/download/'+work;$('download').classList.remove('hidden');}
+    $('download').href='/api/download/'+work;$('download').classList.remove('hidden');
+    if(res.short_url){$('shortPlayer').src=res.short_url+'?t='+Date.now();
+      $('shortDl').href='/api/download_short/'+work;$('shortWrap').classList.remove('hidden');}}
   catch(e){fail($('videoStep'),e.message);}$('genVideo').disabled=false;};
 
 $('genThumb').onclick=async()=>{$('genThumb').disabled=true;

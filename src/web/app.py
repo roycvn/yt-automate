@@ -29,7 +29,7 @@ from ..config import load_config
 from ..generate.script import generate_script, StoryScript, Scene, ThumbnailConcept
 from ..generate.images import generate_scene_images
 from ..generate.voice import synthesize_scenes
-from ..generate.finishing import build_finished_skeleton, overlay_logos, player_safe
+from ..generate.finishing import build_finished_skeleton, overlay_logos, player_safe, make_short
 from ..generate.thumbnail import make_thumbnail
 from ..generate import seo
 from ..clients.klipr import KliprClient
@@ -145,7 +145,9 @@ def api_script(payload: dict) -> dict:
 @app.post("/api/generate")
 async def api_generate(script: str = Form(...), music_mode: str = Form("generate"),
                        music_intensity: float = Form(0.32), channel: str = Form("{}"),
-                       music_file: UploadFile | None = File(None)) -> dict:
+                       make_shorts: bool = Form(False),
+                       music_file: UploadFile | None = File(None),
+                       logo_file: UploadFile | None = File(None)) -> dict:
     cfg = load_config()
     channel = _resolve_channel(json.loads(channel or "{}"))
     story = _script_from_dict(json.loads(script))
@@ -158,6 +160,12 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
     if music_mode == "upload" and music_file is not None:
         music_path = work / f"music_upload{Path(music_file.filename or 'bg').suffix or '.mp3'}"
         music_path.write_bytes(await music_file.read())
+
+    # Custom channel logo (bottom-right). Klipr logo (top-right) stays global.
+    custom_logo = None
+    if logo_file is not None:
+        custom_logo = work / f"logo_upload{Path(logo_file.filename or 'logo').suffix or '.png'}"
+        custom_logo.write_bytes(await logo_file.read())
 
     def job(step):
         step("generating images")
@@ -181,11 +189,21 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
         with httpx.stream("GET", res.download_url, timeout=600) as r:
             r.raise_for_status(); raw.write_bytes(r.read())
         step("brand overlays + final encode")
-        items = [{**it, "path": str(ROOT / it["path"])}
-                 for it in cfg.get("branding", {}).get("logos", [])]
+        items = []
+        for it in cfg.get("branding", {}).get("logos", []):
+            entry = {**it, "path": str(ROOT / it["path"])}
+            # Swap the bottom-right (channel) logo for the uploaded one if given.
+            if custom_logo is not None and it.get("position") == "bottom-right":
+                entry["path"] = str(custom_logo)
+            items.append(entry)
         branded = overlay_logos(raw, work / "branded.mp4", items)
-        player_safe(branded, work / "final.mp4")
-        return {"work": work.name, "video_url": f"/api/video/{work.name}"}
+        final = player_safe(branded, work / "final.mp4")
+        result = {"work": work.name, "video_url": f"/api/video/{work.name}"}
+        if make_shorts:
+            step("creating Short (9:16)")
+            make_short(final, work / "short.mp4")
+            result["short_url"] = f"/api/short/{work.name}"
+        return result
 
     return {"job_id": _run_job(job)}
 
@@ -295,6 +313,22 @@ def api_download(work: str) -> FileResponse:
     if not p.exists():
         raise HTTPException(404, "not ready")
     return FileResponse(p, media_type="video/mp4", filename=f"{work}.mp4")
+
+
+@app.get("/api/short/{work}")
+def api_short(work: str) -> FileResponse:
+    p = WORK_ROOT / work / "short.mp4"
+    if not p.exists():
+        raise HTTPException(404, "not ready")
+    return FileResponse(p, media_type="video/mp4")
+
+
+@app.get("/api/download_short/{work}")
+def api_download_short(work: str) -> FileResponse:
+    p = WORK_ROOT / work / "short.mp4"
+    if not p.exists():
+        raise HTTPException(404, "not ready")
+    return FileResponse(p, media_type="video/mp4", filename=f"{work}-short.mp4")
 
 
 def KliprClient_from_env() -> KliprClient:

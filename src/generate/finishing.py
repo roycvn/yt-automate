@@ -227,6 +227,21 @@ def overlay_logos(src: Path, out: Path, items: list[dict]) -> Path:
     return out
 
 
+def make_short(src: Path, out: Path, *, seconds: int = 50) -> Path:
+    """Reframe the hook of a 16:9 video into a 9:16 Short (1080x1920) with a
+    blurred fill background — captions/branding from the source stay intact."""
+    _run([
+        "ffmpeg", "-y", "-loglevel", "error", "-t", str(seconds), "-i", str(src),
+        "-filter_complex",
+        "[0:v]scale=1080:1920:force_original_aspect_ratio=increase,boxblur=22:4,crop=1080:1920[bg];"
+        "[0:v]scale=1080:-1[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]",
+        "-map", "[v]", "-map", "0:a?", "-t", str(seconds),
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-c:a", "aac", "-b:a", "160k", "-movflags", "+faststart", str(out),
+    ])
+    return out
+
+
 def player_safe(src: Path, out: Path) -> Path:
     """Re-encode to a widely-compatible profile (QuickTime-safe) + faststart."""
     _run([
