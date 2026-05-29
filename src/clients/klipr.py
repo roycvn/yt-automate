@@ -64,13 +64,21 @@ class KliprClient:
     # ------------------------------------------------------------------ image / tts / upload
     async def generate_image(self, prompt: str, aspect_ratio: str = "16:9",
                              output_format: str = "png") -> bytes:
-        async with httpx.AsyncClient(timeout=180) as http:
-            r = await http.post(f"{self.base_url}/image", headers=self._headers, json={
-                "prompt": prompt, "aspect_ratio": aspect_ratio,
-                "output_format": output_format})
-        self._raise_for(r)
+        # Replicate rate-limits bursts. klipr surfaces those as 502
+        # rate_limited; back off with exponential delay and retry.
         import base64
-        return base64.b64decode(r.json()["bytes_base64"])
+        for attempt in range(6):
+            async with httpx.AsyncClient(timeout=180) as http:
+                r = await http.post(f"{self.base_url}/image", headers=self._headers, json={
+                    "prompt": prompt, "aspect_ratio": aspect_ratio,
+                    "output_format": output_format})
+            if r.status_code == 502 and "rate_limited" in r.text and attempt < 5:
+                await asyncio.sleep(2 ** attempt)
+                continue
+            self._raise_for(r)
+            return base64.b64decode(r.json()["bytes_base64"])
+        self._raise_for(r)
+        return b""
 
     async def tts(self, text: str, language: str = "hi",
                   speaker: str = "anushka") -> bytes:
