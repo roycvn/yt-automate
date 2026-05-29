@@ -138,7 +138,11 @@ def api_script(payload: dict) -> dict:
             raise HTTPException(400, "Pasted script must be valid JSON (title, scenes[], ...).")
         return _script_from_dict(data).to_dict()
     channel = _resolve_channel(payload.get("channel"))
-    s = generate_script(channel=channel, theme=payload.get("topic") or None)
+    try:
+        s = generate_script(channel=channel, theme=payload.get("topic") or None)
+    except Exception as e:  # noqa: BLE001
+        return JSONResponse({"error": f"script generation failed: {str(e)[:300]}"},
+                            status_code=502)
     return s.to_dict()
 
 
