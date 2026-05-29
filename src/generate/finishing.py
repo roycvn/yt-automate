@@ -80,6 +80,41 @@ def _drone(out: Path, dur: float) -> Path:
     return out
 
 
+def _probe_duration(path: Path) -> float:
+    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                          "-of", "csv=p=0", str(path)], capture_output=True, text=True).stdout.strip()
+    try:
+        return float(out)
+    except ValueError:
+        return 3.0
+
+
+def _has_audio(path: Path) -> bool:
+    out = subprocess.run(["ffprobe", "-v", "error", "-select_streams", "a", "-show_entries",
+                          "stream=index", "-of", "csv=p=0", str(path)],
+                         capture_output=True, text=True).stdout.strip()
+    return bool(out)
+
+
+def _normalize_intro(src: Path, out: Path) -> Path:
+    """Fit an uploaded intro clip to 1920x1080/30fps with an audio track so it
+    concatenates cleanly (silent track added if the upload has none)."""
+    vf = (f"scale={W}:{H}:force_original_aspect_ratio=decrease,"
+          f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2,fps={FPS},format=yuv420p")
+    if _has_audio(src):
+        cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src), "-vf", vf,
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+               "-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2", str(out)]
+    else:
+        cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(src),
+               "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+               "-vf", vf, "-map", "0:v", "-map", "1:a", "-shortest",
+               "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+               "-c:a", "aac", "-b:a", "160k", str(out)]
+    _run(cmd)
+    return out
+
+
 def _loop_to_duration(src: Path, out: Path, dur: float) -> Path:
     """Loop/trim an uploaded music file to exactly `dur` seconds."""
     _run([
@@ -255,27 +290,35 @@ def player_safe(src: Path, out: Path) -> Path:
 def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path],
                             work: Path, *, intro_title: str, outro_text: str,
                             music_mode: str = "generate", music_path: Path | None = None,
-                            music_intensity: float = 0.32) -> tuple[Path, str]:
+                            music_intensity: float = 0.32,
+                            intro_mode: str = "generate", intro_path: Path | None = None
+                            ) -> tuple[Path, str]:
     """Produce the captionless finished video (intro+body+outro+music) and the
-    ASS text to burn on it. `music_mode`: generate|upload|none. Returns
-    (video_path, ass_text)."""
+    ASS text to burn on it. `music_mode`/`intro_mode`: generate|upload|none.
+    Returns (video_path, ass_text)."""
     work.mkdir(parents=True, exist_ok=True)
     body = assemble(images, audios, work / "body.mp4", work / "body_work", W, H)
-    # Cinematic title/end cards from dedicated Flux backgrounds (slow zoom).
-    intro_bg = generate_image(INTRO_BG_PROMPT, work / "intro_bg.png", aspect_ratio="16:9")
     outro_bg = generate_image(OUTRO_BG_PROMPT, work / "outro_bg.png", aspect_ratio="16:9")
-    intro = _card(work / "intro.mp4", INTRO_S, image=intro_bg)
     outro = _card(work / "outro.mp4", OUTRO_S, image=outro_bg)
-    joined = _concat([intro, body, outro], work / "joined.mp4")
+
+    # Intro: generate a Flux title card, use an uploaded clip, or skip entirely.
+    intro_clip, intro_s, ass_title = None, 0.0, ""
+    if intro_mode == "generate":
+        intro_bg = generate_image(INTRO_BG_PROMPT, work / "intro_bg.png", aspect_ratio="16:9")
+        intro_clip = _card(work / "intro.mp4", INTRO_S, image=intro_bg)
+        intro_s, ass_title = INTRO_S, intro_title
+    elif intro_mode == "upload" and intro_path and Path(intro_path).exists():
+        intro_clip = _normalize_intro(Path(intro_path), work / "intro.mp4")
+        intro_s = _probe_duration(intro_clip)
+
+    clips = ([intro_clip] if intro_clip else []) + [body, outro]
+    joined = _concat(clips, work / "joined.mp4") if len(clips) > 1 else body
 
     body_dur = sum(max(wav_duration(a), 1.0) for a in audios)
-    total = INTRO_S + body_dur + OUTRO_S
+    total = intro_s + body_dur + OUTRO_S
     music = prepare_music(work, total, mode=music_mode, path=music_path)
-    if music is not None:
-        finished = _mix_music(joined, music, work / "finished_nocaps.mp4", music_intensity)
-    else:
-        finished = joined
+    finished = _mix_music(joined, music, work / "finished_nocaps.mp4", music_intensity) if music else joined
 
-    ass = build_ass(scenes, audios, intro_s=INTRO_S, outro_s=OUTRO_S,
-                    intro_title=intro_title, outro_text=outro_text)
+    ass = build_ass(scenes, audios, intro_s=intro_s, outro_s=OUTRO_S,
+                    intro_title=ass_title, outro_text=outro_text)
     return finished, ass

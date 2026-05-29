@@ -114,7 +114,18 @@
   </div>
 
   <div class="card">
-    <h2><span class="badge">2</span> Background music</h2>
+    <h2><span class="badge">2</span> Intro</h2>
+    <div class="seg" id="introSeg">
+      <label><input type="radio" name="intro" value="generate" checked><span>Generate</span></label>
+      <label><input type="radio" name="intro" value="upload"><span>Upload</span></label>
+      <label><input type="radio" name="intro" value="none"><span>No intro</span></label>
+    </div>
+    <input id="introFile" type="file" accept="video/*" class="hidden sp" />
+    <p class="hint sp">Generate = animated title card with your story title. Upload = your own intro clip.</p>
+  </div>
+
+  <div class="card">
+    <h2><span class="badge">3</span> Background music</h2>
     <div class="seg" id="musicSeg">
       <label><input type="radio" name="music" value="generate" checked><span>Generate</span></label>
       <label><input type="radio" name="music" value="upload"><span>Upload</span></label>
@@ -180,6 +191,7 @@ function onLangChange(){           // language drives the whole profile
   else applyLang();                                                  // at least voice+outro
 }
 const bottomLogoMode=()=>document.querySelector('input[name=blogo]:checked').value;
+const introMode=()=>document.querySelector('input[name=intro]:checked').value;
 function fillChannel(c){$('chName').value=c.name||'';$('niche').value=c.niche||'';
   $('tone').value=c.tone||'';$('artStyle').value=c.art_style||'';$('outro').value=c.outro_text||'';
   $('scenes').value=c.scenes||16;if(c.language)$('language').value=c.language;
@@ -219,6 +231,8 @@ function setScript(s){script=s;$('scriptView').classList.remove('hidden');
 $('intensity').oninput=e=>$('intVal').textContent=e.target.value;
 document.querySelectorAll('input[name=music]').forEach(r=>r.onchange=()=>
   $('musicFile').classList.toggle('hidden',musicMode()!=='upload'));
+document.querySelectorAll('input[name=intro]').forEach(r=>r.onchange=()=>
+  $('introFile').classList.toggle('hidden',introMode()!=='upload'));
 
 $('genScript').onclick=async()=>{$('genScript').disabled=true;$('scriptInfo').textContent='generating…';
   try{setScript(await(await fetch('/api/script',{method:'POST',headers:{'Content-Type':'application/json'},
@@ -234,8 +248,10 @@ $('genVideo').onclick=async()=>{try{script=JSON.parse($('scriptView').value);}ca
   fd.append('music_intensity',$('intensity').value);fd.append('channel',JSON.stringify(buildChannel()));
   fd.append('make_shorts',$('makeShorts').checked);
   fd.append('bottom_logo',bottomLogoMode());
+  fd.append('intro_mode',introMode());
   if(musicMode()==='upload'&&$('musicFile').files[0])fd.append('music_file',$('musicFile').files[0]);
   if(bottomLogoMode()==='upload'&&$('logoFile').files[0])fd.append('logo_file',$('logoFile').files[0]);
+  if(introMode()==='upload'&&$('introFile').files[0])fd.append('intro_file',$('introFile').files[0]);
   try{const{job_id}=await(await fetch('/api/generate',{method:'POST',body:fd})).json();
     const res=await poll(job_id,s=>running($('videoStep'),s));work=res.work;ok($('videoStep'),'video ready');
     $('player').src=res.video_url+'?t='+Date.now();$('player').classList.remove('hidden');

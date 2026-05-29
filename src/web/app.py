@@ -146,8 +146,10 @@ def api_script(payload: dict) -> dict:
 async def api_generate(script: str = Form(...), music_mode: str = Form("generate"),
                        music_intensity: float = Form(0.32), channel: str = Form("{}"),
                        make_shorts: bool = Form(False), bottom_logo: str = Form("default"),
+                       intro_mode: str = Form("generate"),
                        music_file: UploadFile | None = File(None),
-                       logo_file: UploadFile | None = File(None)) -> dict:
+                       logo_file: UploadFile | None = File(None),
+                       intro_file: UploadFile | None = File(None)) -> dict:
     cfg = load_config()
     channel = _resolve_channel(json.loads(channel or "{}"))
     story = _script_from_dict(json.loads(script))
@@ -167,6 +169,11 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
         custom_logo = work / f"logo_upload{Path(logo_file.filename or 'logo').suffix or '.png'}"
         custom_logo.write_bytes(await logo_file.read())
 
+    intro_path = None
+    if intro_mode == "upload" and intro_file is not None:
+        intro_path = work / f"intro_upload{Path(intro_file.filename or 'intro').suffix or '.mp4'}"
+        intro_path.write_bytes(await intro_file.read())
+
     def job(step):
         step("generating images")
         images = generate_scene_images(story.scenes, work / "images")
@@ -179,7 +186,8 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
             story.scenes, images, audios, work / "finish",
             intro_title=story.title,
             outro_text=channel.get("outro_text", f"{channel.get('name','Subscribe')} 🔔"),
-            music_mode=music_mode, music_path=music_path, music_intensity=music_intensity)
+            music_mode=music_mode, music_path=music_path, music_intensity=music_intensity,
+            intro_mode=intro_mode, intro_path=intro_path)
         step("burning captions (klipr)")
         klipr = KliprClient_from_env()
         url = upload_and_sign(finished, f"web/{work.name}.mp4")

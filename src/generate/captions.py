@@ -52,9 +52,11 @@ def build_ass(scenes: list, audio_paths: list[Path], *,
               intro_title: str, outro_text: str) -> str:
     """Compose the full ASS. Body scenes are offset by intro_s; outro at the end."""
     events: list[str] = []
-    # Intro title card — fade in/out + slow scale-up for a cinematic reveal.
-    intro_fx = r"{\fad(600,500)\t(0,2400,\fscx118\fscy118)}"
-    events.append(_event(0.2, max(intro_s - 0.2, 0.6), "Title", intro_fx + intro_title))
+    # Intro title card — only when we generated a title card (intro_title set
+    # and there's intro time). For uploaded/no intro, skip the title event.
+    if intro_title and intro_s > 0.5:
+        intro_fx = r"{\fad(600,500)\t(0,2400,\fscx118\fscy118)}"
+        events.append(_event(0.2, max(intro_s - 0.2, 0.6), "Title", intro_fx + intro_title))
 
     # Scene captions, split per sentence proportionally across each scene's audio.
     t = intro_s
