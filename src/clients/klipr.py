@@ -64,30 +64,51 @@ class KliprClient:
     # ------------------------------------------------------------------ image / tts / upload
     async def generate_image(self, prompt: str, aspect_ratio: str = "16:9",
                              output_format: str = "png") -> bytes:
-        # Replicate rate-limits bursts. klipr surfaces those as 502
-        # rate_limited; back off with exponential delay and retry.
+        # Retry on Replicate burst rate-limits (klipr -> 502 rate_limited) AND
+        # on transient network failures (DNS / connection drops).
         import base64
+        last_err: Exception | None = None
         for attempt in range(6):
-            async with httpx.AsyncClient(timeout=180) as http:
-                r = await http.post(f"{self.base_url}/image", headers=self._headers, json={
-                    "prompt": prompt, "aspect_ratio": aspect_ratio,
-                    "output_format": output_format})
+            try:
+                async with httpx.AsyncClient(timeout=180) as http:
+                    r = await http.post(f"{self.base_url}/image", headers=self._headers, json={
+                        "prompt": prompt, "aspect_ratio": aspect_ratio,
+                        "output_format": output_format})
+            except (httpx.ConnectError, httpx.ReadError, httpx.ReadTimeout) as e:
+                last_err = e
+                if attempt < 5:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                raise KliprError(f"klipr image network error after {attempt+1} tries: {e}")
             if r.status_code == 502 and "rate_limited" in r.text and attempt < 5:
                 await asyncio.sleep(2 ** attempt)
                 continue
             self._raise_for(r)
             return base64.b64decode(r.json()["bytes_base64"])
-        self._raise_for(r)
+        if last_err:
+            raise KliprError(f"klipr image network error: {last_err}")
         return b""
 
     async def tts(self, text: str, language: str = "hi",
                   speaker: str = "anushka") -> bytes:
-        async with httpx.AsyncClient(timeout=180) as http:
-            r = await http.post(f"{self.base_url}/tts", headers=self._headers, json={
-                "text": text, "language": language, "speaker": speaker})
-        self._raise_for(r)
         import base64
-        return base64.b64decode(r.json()["bytes_base64"])
+        last_err: Exception | None = None
+        for attempt in range(4):
+            try:
+                async with httpx.AsyncClient(timeout=180) as http:
+                    r = await http.post(f"{self.base_url}/tts", headers=self._headers, json={
+                        "text": text, "language": language, "speaker": speaker})
+            except (httpx.ConnectError, httpx.ReadError, httpx.ReadTimeout) as e:
+                last_err = e
+                if attempt < 3:
+                    await asyncio.sleep(2 ** attempt)
+                    continue
+                raise KliprError(f"klipr tts network error after {attempt+1} tries: {e}")
+            self._raise_for(r)
+            return base64.b64decode(r.json()["bytes_base64"])
+        if last_err:
+            raise KliprError(f"klipr tts network error: {last_err}")
+        return b""
 
     async def upload_file(self, path: Path) -> str:
         """Upload a local file to klipr; returns a 1h signed URL.
