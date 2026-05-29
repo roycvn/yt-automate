@@ -11,20 +11,46 @@ import re
 import wave
 from pathlib import Path
 
-ASS_HEADER = """[Script Info]
-ScriptType: v4.00+
-PlayResX: 1920
-PlayResY: 1080
-WrapStyle: 0
+# Per-language Noto font picker. Using the wrong script's Noto (e.g. Devanagari
+# for Telugu) makes libass fall back to a font that doesn't shape that script's
+# conjuncts — letters render as disconnected base+vowel-sign pairs instead of
+# proper akshara. Match the script to the language.
+_FONT_BY_LANG = {
+    "hi": "Noto Sans Devanagari",
+    "mr": "Noto Sans Devanagari",
+    "ne": "Noto Sans Devanagari",
+    "sa": "Noto Sans Devanagari",
+    "te": "Noto Sans Telugu",
+    "ta": "Noto Sans Tamil",
+    "kn": "Noto Sans Kannada",
+    "ml": "Noto Sans Malayalam",
+    "bn": "Noto Sans Bengali",
+    "gu": "Noto Sans Gujarati",
+    "pa": "Noto Sans Gurmukhi",
+    "or": "Noto Sans Oriya",
+    "en": "Noto Sans",
+}
 
-[V4+ Styles]
-Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Caption,Noto Sans Devanagari,64,&H00FFFFFF,&H00000000,&H64000000,1,0,1,3,2,2,80,80,90,1
-Style: Title,Noto Sans Devanagari,120,&H0000D7FF,&H00101010,&H96000000,1,0,1,6,5,5,80,80,80,1
 
-[Events]
-Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-"""
+def _font_for(lang: str) -> str:
+    return _FONT_BY_LANG.get((lang or "hi").lower(), "Noto Sans")
+
+
+def _ass_header(font: str) -> str:
+    return (
+        "[Script Info]\n"
+        "ScriptType: v4.00+\n"
+        "PlayResX: 1920\n"
+        "PlayResY: 1080\n"
+        "WrapStyle: 0\n\n"
+        "[V4+ Styles]\n"
+        "Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, "
+        "Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding\n"
+        f"Style: Caption,{font},64,&H00FFFFFF,&H00000000,&H64000000,1,0,1,3,2,2,80,80,90,1\n"
+        f"Style: Title,{font},120,&H0000D7FF,&H00101010,&H96000000,1,0,1,6,5,5,80,80,80,1\n\n"
+        "[Events]\n"
+        "Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text\n"
+    )
 
 
 def wav_duration(path: Path) -> float:
@@ -49,7 +75,8 @@ def _event(start: float, end: float, style: str, text: str) -> str:
 
 def build_ass(scenes: list, audio_paths: list[Path], *,
               intro_s: float, outro_s: float,
-              intro_title: str, outro_text: str) -> str:
+              intro_title: str, outro_text: str,
+              language: str = "hi") -> str:
     """Compose the full ASS. Body scenes are offset by intro_s; outro at the end."""
     events: list[str] = []
     # Intro title card — only when we generated a title card (intro_title set
@@ -76,4 +103,4 @@ def build_ass(scenes: list, audio_paths: list[Path], *,
 
     # Outro CTA.
     events.append(_event(t + 0.2, t + outro_s, "Title", r"{\fad(500,400)}" + outro_text))
-    return ASS_HEADER + "\n".join(events) + "\n"
+    return _ass_header(_font_for(language)) + "\n".join(events) + "\n"
