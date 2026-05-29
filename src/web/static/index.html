@@ -84,6 +84,9 @@
     </div>
     <input id="logoFile" type="file" accept="image/png,image/*" class="hidden sp" />
 
+    <label class="sp" style="display:block;color:var(--mut)">
+      <input type="checkbox" id="premium"> ⭐ Premium — remove “Made with Klipr” watermark</label>
+
     <div class="row sp">
       <span class="pill" id="voicePill">voice: —</span>
       <span class="pill" id="lenPill">~0:00</span>
@@ -199,7 +202,7 @@ function fillChannel(c){$('chName').value=c.name||'';$('niche').value=c.niche||'
 function buildChannel(){return{name:$('chName').value,niche:$('niche').value,tone:$('tone').value,
   art_style:$('artStyle').value,outro_text:$('outro').value,language:$('language').value,
   language_name:$('language').selectedOptions[0].textContent,voice_speaker:$('voice').value,
-  scenes:parseInt($('scenes').value)||16};}
+  scenes:parseInt($('scenes').value)||16,premium:$('premium').checked};}
 
 async function poll(jid,onStep){while(true){const j=await(await fetch('/api/job/'+jid)).json();
   onStep(j.step||'');if(j.status==='done')return j.result;if(j.status==='error')throw new Error(j.error||'failed');

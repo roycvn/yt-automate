@@ -75,7 +75,7 @@ def produce(reuse_script: Path | None = None,
                                language=language, speaker=speaker)
     print("images + voice done")
 
-    finished, ass = build_finished_skeleton(
+    finished, ass, meta = build_finished_skeleton(
         script.scenes, images, audios, work / "finish",
         intro_title=script.title, outro_text=outro)
     url = upload_and_sign(finished, f"produce/{work.name}.mp4")
@@ -85,9 +85,19 @@ def produce(reuse_script: Path | None = None,
     with httpx.stream("GET", res.download_url, timeout=600) as r:
         r.raise_for_status()
         raw.write_bytes(r.read())
-    # Brand overlays from config (paths resolved relative to repo root).
-    items = [{**it, "path": str(ROOT / it["path"])}
-             for it in cfg.get("branding", {}).get("logos", [])]
+    # Brand overlays: Klipr top-right (unless premium); channel logo only on the
+    # real video (windowed between intro end and body end).
+    premium = bool(channel.get("premium"))
+    items = []
+    for it in cfg.get("branding", {}).get("logos", []):
+        pos = it.get("position")
+        entry = {**it, "path": str(ROOT / it["path"])}
+        if pos == "top-right" and premium:
+            continue
+        if pos == "bottom-right":
+            entry["start"] = meta["intro_s"]
+            entry["end"] = meta["body_end"]
+        items.append(entry)
     branded = overlay_logos(raw, work / "branded.mp4", items)
     final = player_safe(branded, work / "final.mp4")
     print("final video:", final)

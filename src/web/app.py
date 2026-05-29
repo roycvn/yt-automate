@@ -182,7 +182,7 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
                                    language=channel.get("language", "hi"),
                                    speaker=channel.get("voice_speaker", "anushka"))
         step("assembling + background music")
-        finished, ass = build_finished_skeleton(
+        finished, ass, meta = build_finished_skeleton(
             story.scenes, images, audios, work / "finish",
             intro_title=story.title,
             outro_text=channel.get("outro_text", f"{channel.get('name','Subscribe')} 🔔"),
@@ -197,15 +197,21 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
         with httpx.stream("GET", res.download_url, timeout=600) as r:
             r.raise_for_status(); raw.write_bytes(r.read())
         step("brand overlays + final encode")
+        premium = bool(channel.get("premium"))
         items = []
         for it in cfg.get("branding", {}).get("logos", []):
+            pos = it.get("position")
             entry = {**it, "path": str(ROOT / it["path"])}
-            if it.get("position") == "bottom-right":
-                # Channel logo: none | upload (custom) | default (config).
+            if pos == "top-right":          # "Made with Klipr" — global, top-right
+                if premium:                 # premium removes the Klipr mark
+                    continue
+            elif pos == "bottom-right":     # channel logo — only on the real video
                 if bottom_logo == "none":
                     continue
                 if bottom_logo == "upload" and custom_logo is not None:
                     entry["path"] = str(custom_logo)
+                entry["start"] = meta["intro_s"]
+                entry["end"] = meta["body_end"]
             items.append(entry)
         branded = overlay_logos(raw, work / "branded.mp4", items)
         final = player_safe(branded, work / "final.mp4")

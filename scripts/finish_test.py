@@ -26,7 +26,7 @@ async def main() -> None:
     auds = [Path(f"artifacts/build/aud_{s.id:02d}.wav") for s in scenes]
 
     work = Path("artifacts/finish")
-    finished, ass = build_finished_skeleton(
+    finished, ass, _ = build_finished_skeleton(
         scenes, imgs, auds, work,
         intro_title=data["title_hi"],
         outro_text="TheStoryBoardz — सब्सक्राइब करें 🔔",

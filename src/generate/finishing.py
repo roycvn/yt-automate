@@ -229,14 +229,11 @@ _POS = {
 
 
 def overlay_logos(src: Path, out: Path, items: list[dict]) -> Path:
-    """Overlay an arbitrary set of logos from config. Each item:
-    {path, position, scale, opacity, margin}. Unknown/missing entries skipped.
-    `position` is one of _POS keys. Re-encodes once."""
-    valid = []
-    for it in items:
-        p = Path(it["path"])
-        if p.exists() and it.get("position") in _POS:
-            valid.append(it)
+    """Overlay logos. Each item: {path, position, scale, opacity, margin,
+    start?, end?}. `start`/`end` (seconds) restrict when the logo shows — e.g.
+    the channel logo only during the real video (not intro/outro). Unknown or
+    missing entries skipped. Re-encodes once."""
+    valid = [it for it in items if Path(it["path"]).exists() and it.get("position") in _POS]
     if not valid:
         return src
     inputs = ["-i", str(src)]
@@ -248,9 +245,15 @@ def overlay_logos(src: Path, out: Path, items: list[dict]) -> Path:
         op = float(it.get("opacity", 0.9))
         m = int(it.get("margin", 36))
         xy = _POS[it["position"]].format(m=m)
+        conds = []
+        if it.get("start") is not None:
+            conds.append(f"gte(t,{float(it['start']):.2f})")
+        if it.get("end") is not None:
+            conds.append(f"lte(t,{float(it['end']):.2f})")
+        enable = f":enable='{'*'.join(conds)}'" if conds else ""
         filters.append(f"[{i}]format=rgba,colorchannelmixer=aa={op},scale=iw*{scale}:-1[l{i}]")
         tag = f"v{i}"
-        filters.append(f"[{last}][l{i}]overlay={xy}[{tag}]")
+        filters.append(f"[{last}][l{i}]overlay={xy}{enable}[{tag}]")
         last = tag
     _run([
         "ffmpeg", "-y", "-loglevel", "error", *inputs,
@@ -292,7 +295,7 @@ def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path]
                             music_mode: str = "generate", music_path: Path | None = None,
                             music_intensity: float = 0.32,
                             intro_mode: str = "generate", intro_path: Path | None = None
-                            ) -> tuple[Path, str]:
+                            ) -> tuple[Path, str, dict]:
     """Produce the captionless finished video (intro+body+outro+music) and the
     ASS text to burn on it. `music_mode`/`intro_mode`: generate|upload|none.
     Returns (video_path, ass_text)."""
@@ -321,4 +324,5 @@ def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path]
 
     ass = build_ass(scenes, audios, intro_s=intro_s, outro_s=OUTRO_S,
                     intro_title=ass_title, outro_text=outro_text)
-    return finished, ass
+    return finished, ass, {"intro_s": intro_s, "body_dur": body_dur,
+                           "body_end": intro_s + body_dur}
