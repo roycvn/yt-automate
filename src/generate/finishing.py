@@ -157,6 +157,53 @@ def add_logos(src: Path, out: Path, *, right_logo: Path | None = None,
     return out
 
 
+# position name -> ffmpeg overlay x:y expression (w,h = overlay dims, m = margin)
+_POS = {
+    "top-left": "{m}:{m}",
+    "top-right": "W-w-{m}:{m}",
+    "top-center": "(W-w)/2:{m}",
+    "mid-left": "{m}:(H-h)/2",
+    "mid-right": "W-w-{m}:(H-h)/2",
+    "bottom-left": "{m}:H-h-{m}",
+    "bottom-right": "W-w-{m}:H-h-{m}",
+    "bottom-center": "(W-w)/2:H-h-{m}",
+}
+
+
+def overlay_logos(src: Path, out: Path, items: list[dict]) -> Path:
+    """Overlay an arbitrary set of logos from config. Each item:
+    {path, position, scale, opacity, margin}. Unknown/missing entries skipped.
+    `position` is one of _POS keys. Re-encodes once."""
+    valid = []
+    for it in items:
+        p = Path(it["path"])
+        if p.exists() and it.get("position") in _POS:
+            valid.append(it)
+    if not valid:
+        return src
+    inputs = ["-i", str(src)]
+    filters: list[str] = []
+    last = "0:v"
+    for i, it in enumerate(valid, start=1):
+        inputs += ["-i", str(it["path"])]
+        scale = float(it.get("scale", 0.14))
+        op = float(it.get("opacity", 0.9))
+        m = int(it.get("margin", 36))
+        xy = _POS[it["position"]].format(m=m)
+        filters.append(f"[{i}]format=rgba,colorchannelmixer=aa={op},scale=iw*{scale}:-1[l{i}]")
+        tag = f"v{i}"
+        filters.append(f"[{last}][l{i}]overlay={xy}[{tag}]")
+        last = tag
+    _run([
+        "ffmpeg", "-y", "-loglevel", "error", *inputs,
+        "-filter_complex", ";".join(filters),
+        "-map", f"[{last}]", "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-c:a", "copy", str(out),
+    ])
+    return out
+
+
 def player_safe(src: Path, out: Path) -> Path:
     """Re-encode to a widely-compatible profile (QuickTime-safe) + faststart."""
     _run([

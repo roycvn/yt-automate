@@ -42,3 +42,24 @@ klipr:
 storage:
   artifacts_dir: ./artifacts
   db_path: ./yta.db
+
+# Brand logo overlays burned onto every finished video. Paths relative to repo
+# root; positions: top-left/top-right/top-center/mid-left/mid-right/
+# bottom-left/bottom-right/bottom-center. scale = fraction of video width.
+branding:
+  logos:
+    - path: assets/logos/klipr.png            # "Made with Klipr"
+      position: top-right
+      scale: 0.12
+      opacity: 0.9
+    - path: assets/logo_trans_white_letter.png  # TheStoryBoardz
+      position: bottom-right
+      scale: 0.16
+      opacity: 0.95
+
+thumbnail:
+  # Big two-tone brush-style title + red banner subtitle (reference look).
+  banner_text: "BASED ON A TRUE STORY"
+  subject: "terrified young woman, hand over mouth, tears, wide eyes"
+  title_color: "&H00FFFFFF"   # white (ASS BGR)
+  accent_color: "&H000000FF"  # red

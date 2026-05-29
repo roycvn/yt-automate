@@ -19,7 +19,8 @@ from pathlib import Path
 from .generate.script import generate_script, StoryScript, Scene
 from .generate.images import generate_scene_images
 from .generate.voice import synthesize_scenes
-from .generate.finishing import build_finished_skeleton, player_safe, add_logos
+from .generate.finishing import build_finished_skeleton, player_safe, overlay_logos
+from .config import load_config
 from .generate.thumbnail import make_thumbnail
 from .generate import seo
 from .clients.klipr import KliprClient
@@ -71,15 +72,21 @@ def produce(language: str = "hi", reuse_script: Path | None = None,
     with httpx.stream("GET", res.download_url, timeout=600) as r:
         r.raise_for_status()
         raw.write_bytes(r.read())
-    # Brand overlays: Klipr logo top-right, TheStoryBoardz logo bottom-right.
-    branded = add_logos(raw, work / "branded.mp4",
-                        tr_logo=ROOT / "assets" / "logos" / "klipr.png",
-                        br_logo=ROOT / "assets" / "logo_trans_white_letter.png")
+    # Brand overlays from config (paths resolved relative to repo root).
+    cfg = load_config()
+    items = [{**it, "path": str(ROOT / it["path"])}
+             for it in cfg.get("branding", {}).get("logos", [])]
+    branded = overlay_logos(raw, work / "branded.mp4", items)
     final = player_safe(branded, work / "final.mp4")
     print("final video:", final)
 
-    thumb = make_thumbnail(script.title_hi, work / "thumb",
-                           klipr=klipr, upload_and_sign=upload_and_sign)
+    tcfg = cfg.get("thumbnail", {})
+    thumb = make_thumbnail(
+        script.title_hi, work / "thumb", klipr=klipr, upload_and_sign=upload_and_sign,
+        subject=tcfg.get("subject", "terrified young woman, hand over mouth, wide eyes"),
+        banner=tcfg.get("banner_text", "BASED ON A TRUE STORY"),
+        title_color=tcfg.get("title_color", "&H00FFFFFF"),
+        accent_color=tcfg.get("accent_color", "&H000000FF"))
     print("thumbnail:", thumb)
 
     description = seo.build_description(script.title_hi, script.title_translit,

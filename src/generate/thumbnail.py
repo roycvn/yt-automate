@@ -1,9 +1,9 @@
-"""Eye-catching thumbnail generation.
+"""Eye-catching thumbnail generation (reference style).
 
-Flux renders a dramatic, high-contrast horror background (close-up scary
-subject, space for text); klipr's libass burns a huge title (correct
-Devanagari/Telugu shaping); we extract a single 1280x720 frame as the
-thumbnail. Reuses the same proven caption pipeline so text never breaks.
+Flux renders a dramatic scene — a terrified human face on one side, a haunted
+scene behind — with empty space for text. klipr's libass burns a huge title
+plus a red "banner" subtitle (correct Devanagari/Telugu shaping). We extract a
+1280x720 frame. Composition mimics high-CTR horror thumbnails.
 """
 from __future__ import annotations
 
@@ -14,15 +14,17 @@ from .images import generate_image
 
 W, H = 1280, 720
 
+# Subject on the RIGHT, dark space on the LEFT for the title (like the sample).
 THUMB_BG_PROMPT_T = (
-    "YouTube horror thumbnail, ultra dramatic, high contrast, vivid colors, "
-    "a terrifying {subject} close-up with glowing eyes, blood-red and teal "
-    "lighting, fog, intense shadows, cinematic 2D animated horror style, "
-    "lots of empty space at the top for big text, no text, eye-catching"
+    "YouTube horror thumbnail background, ultra dramatic cinematic, high "
+    "contrast, a {subject} on the RIGHT side lit by cold moonlight, a creepy "
+    "haunted house and a ghostly figure in the misty background, blood-red and "
+    "teal color grade, deep shadows, the LEFT third is dark empty space for a "
+    "title, photoreal horror, no text, terrifying, eye-catching"
 )
 
-# A short ASS that places one huge glowing line in the upper third.
-THUMB_ASS = """[Script Info]
+# Two styles: a huge white title (top-left) + a red banner subtitle (bottom-left).
+THUMB_ASS_T = """[Script Info]
 ScriptType: v4.00+
 PlayResX: 1280
 PlayResY: 720
@@ -30,11 +32,13 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Thumb,Noto Sans Devanagari,180,&H0000F0FF,&H00000000,&H00000000,1,0,1,14,7,8,60,60,60,1
+Style: BigTitle,Noto Sans Devanagari,150,{title_color},&H00000000,&H00000000,1,0,1,14,8,7,50,50,60,1
+Style: Banner,Noto Sans Devanagari,56,&H00FFFFFF,&H00000000,{accent_color},1,0,4,0,0,1,50,50,70,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-Dialogue: 0,0:00:00.00,0:00:02.00,Thumb,,0,0,0,,{title}
+Dialogue: 0,0:00:00.00,0:00:02.00,BigTitle,,0,0,0,,{title}
+Dialogue: 0,0:00:00.00,0:00:02.00,Banner,,0,0,0,,{banner}
 """
 
 
@@ -54,9 +58,12 @@ def _still_clip(image: Path, out: Path, dur: float = 2.0) -> Path:
 
 
 def make_thumbnail(title: str, work: Path, *, klipr, upload_and_sign,
-                   subject: str = "chudail witch") -> Path:
-    """Produce a 1280x720 thumbnail PNG with the title burned in. `klipr` is a
-    KliprClient; `upload_and_sign(path, key)` returns a klipr-fetchable URL."""
+                   subject: str = "terrified young woman, hand over mouth, wide eyes",
+                   banner: str = "BASED ON A TRUE STORY",
+                   title_color: str = "&H00FFFFFF",
+                   accent_color: str = "&H000000FF") -> Path:
+    """Produce a 1280x720 thumbnail with a huge title + red banner burned in.
+    `klipr` is a KliprClient; `upload_and_sign(path, key)` -> klipr-fetchable URL."""
     import asyncio
     import time
     import httpx
@@ -65,10 +72,11 @@ def make_thumbnail(title: str, work: Path, *, klipr, upload_and_sign,
     bg = generate_image(THUMB_BG_PROMPT_T.format(subject=subject),
                         work / "thumb_bg.png", aspect_ratio="16:9")
     clip = _still_clip(bg, work / "thumb_clip.mp4")
-    ass = THUMB_ASS.format(title=title)
+    ass = THUMB_ASS_T.format(title=title, banner=banner,
+                             title_color=title_color, accent_color=accent_color)
 
     url = upload_and_sign(clip, f"thumb/{int(time.time())}.mp4")
-    res = asyncio.run(klipr.caption_burn(url, ass))
+    res = asyncio.run(klipr.caption_burn(url, ass, watermark=False))
     burned = work / "thumb_burned.mp4"
     with httpx.stream("GET", res.download_url, timeout=300) as r:
         r.raise_for_status()
