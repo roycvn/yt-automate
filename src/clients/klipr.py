@@ -90,11 +90,16 @@ class KliprClient:
         return base64.b64decode(r.json()["bytes_base64"])
 
     async def upload_file(self, path: Path) -> str:
-        """Upload a local file to klipr; returns a 1h signed URL."""
+        """Upload a local file to klipr; returns a 1h signed URL.
+        Mime is inferred from extension because the reels-output bucket only
+        accepts allow-listed types (video/mp4, video/webm)."""
+        import mimetypes
+        p = Path(path)
+        mime = mimetypes.guess_type(p.name)[0] or "video/mp4"
         async with httpx.AsyncClient(timeout=180) as http:
-            with open(path, "rb") as fh:
+            with open(p, "rb") as fh:
                 r = await http.post(f"{self.base_url}/upload", headers=self._headers,
-                                    files={"file": (Path(path).name, fh, "application/octet-stream")})
+                                    files={"file": (p.name, fh, mime)})
         self._raise_for(r)
         return r.json()["signed_url"]
 
