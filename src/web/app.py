@@ -35,6 +35,7 @@ from ..generate import seo
 from ..clients.klipr import KliprClient
 from ..clients.storage import upload_and_sign
 from ..produce import youtube_for
+from . import yt_accounts
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 WORK_ROOT = ROOT / "artifacts" / "web"
@@ -227,10 +228,12 @@ def api_upload(payload: dict) -> dict:
     work = WORK_ROOT / payload["work"]
     story = _script_from_dict(json.loads((work / "script.json").read_text()))
 
+    account_id = payload.get("account_id")
+
     def job(step):
-        yt = youtube_for(language)
+        yt = yt_accounts.client_for(account_id) if account_id else youtube_for(language)
         if yt is None:
-            raise RuntimeError("YouTube not connected (set creds in .env).")
+            raise RuntimeError("No YouTube channel selected. Connect a channel first.")
         desc = seo.build_description(story.title, story.title_translit,
                                      story.description, story.tags, channel)
         tags = seo.build_tags(story.tags, channel.get("seo_tags"))
@@ -258,11 +261,16 @@ def api_job(jid: str) -> dict:
     return j
 
 
-@app.get("/api/youtube/status")
-def api_youtube_status() -> dict:
-    load_config()
-    yt = youtube_for(load_config().get("channel", {}).get("language", "hi"))
-    return {"connected": yt is not None}
+@app.get("/api/youtube/accounts")
+def api_youtube_accounts() -> dict:
+    return {"accounts": yt_accounts.list_accounts()}
+
+
+@app.post("/api/youtube/connect")
+def api_youtube_connect() -> dict:
+    """Opens a browser for Google consent, then stores the channel."""
+    return {"job_id": _run_job(lambda step: (step("waiting for Google consent…"),
+                                             yt_accounts.connect())[1])}
 
 
 @app.get("/api/video/{work}")

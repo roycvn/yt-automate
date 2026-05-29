@@ -5,246 +5,240 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>yta studio</title>
 <style>
-  :root { --bg:#0b0b12; --card:#15151f; --line:#262633; --txt:#e8e8f0; --mut:#9a9ab0;
-          --acc:#e23744; --ok:#36c08a; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--txt);
-         font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
-  header { padding:18px 24px; border-bottom:1px solid var(--line); font-weight:700; font-size:18px; }
-  header span { color:var(--acc); }
-  main { max-width:880px; margin:0 auto; padding:24px; }
-  .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
-          padding:18px 20px; margin:0 0 18px; }
-  .card h2 { margin:0 0 12px; font-size:15px; color:var(--mut); text-transform:uppercase;
-             letter-spacing:.06em; }
-  textarea, input[type=text] { width:100%; background:#0e0e16; color:var(--txt);
-     border:1px solid var(--line); border-radius:9px; padding:10px 12px; font:inherit; }
-  textarea { min-height:80px; resize:vertical; }
-  button { background:var(--acc); color:#fff; border:0; border-radius:9px; padding:10px 16px;
-     font:inherit; font-weight:600; cursor:pointer; }
-  button.ghost { background:#23232f; }
-  button:disabled { opacity:.5; cursor:not-allowed; }
-  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-  .mut { color:var(--mut); }
-  .pill { font-size:12px; padding:3px 9px; border-radius:999px; background:#23232f; }
-  .step { color:var(--mut); font-size:13px; margin-top:8px; min-height:18px; }
-  video, img.thumb { width:100%; border-radius:10px; border:1px solid var(--line); margin-top:10px; }
-  label.r { margin-right:14px; }
-  .ok { color:var(--ok); } .err { color:var(--acc); }
-  .hidden { display:none; }
-  a.dl { color:var(--txt); }
+  :root{
+    --bg:#0a0a0f; --bg2:#0f0f17; --card:#16161f; --card2:#1c1c28; --line:#2a2a3a;
+    --txt:#ecedf5; --mut:#9494ad; --acc:#ff4d6d; --acc2:#9b5cff; --ok:#3ddc97; --warn:#ffb84d;
+    --grad:linear-gradient(135deg,#ff4d6d,#9b5cff);
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:radial-gradient(1200px 600px at 80% -10%,#1a1330 0,var(--bg) 55%);
+       color:var(--txt);font:15px/1.55 -apple-system,Segoe UI,Roboto,Inter,sans-serif;min-height:100vh;}
+  header{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:14px;
+         padding:16px 28px;background:rgba(10,10,15,.7);backdrop-filter:blur(12px);
+         border-bottom:1px solid var(--line);}
+  .logo{font-weight:800;font-size:20px;letter-spacing:-.02em;}
+  .logo b{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;}
+  .tag{color:var(--mut);font-size:13px;margin-left:auto;}
+  main{max-width:920px;margin:0 auto;padding:28px 20px 80px;}
+  .card{background:linear-gradient(180deg,var(--card2),var(--card));border:1px solid var(--line);
+        border-radius:18px;padding:20px 22px;margin:0 0 18px;box-shadow:0 8px 30px rgba(0,0,0,.25);}
+  .card h2{margin:0 0 14px;font-size:13px;color:var(--mut);text-transform:uppercase;
+           letter-spacing:.1em;display:flex;align-items:center;gap:10px;}
+  .badge{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;
+         border-radius:50%;background:var(--grad);color:#fff;font-weight:700;font-size:13px;}
+  textarea,input[type=text],select{width:100%;background:#0c0c14;color:var(--txt);
+     border:1px solid var(--line);border-radius:11px;padding:11px 13px;font:inherit;outline:none;}
+  textarea:focus,input:focus,select:focus{border-color:var(--acc2);box-shadow:0 0 0 3px rgba(155,92,255,.18);}
+  textarea{min-height:80px;resize:vertical;}
+  select{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--mut) 50%),
+     linear-gradient(135deg,var(--mut) 50%,transparent 50%);
+     background-position:calc(100% - 18px) 18px,calc(100% - 13px) 18px;
+     background-size:5px 5px,5px 5px;background-repeat:no-repeat;}
+  button{background:var(--grad);color:#fff;border:0;border-radius:11px;padding:11px 18px;
+     font:inherit;font-weight:650;cursor:pointer;transition:transform .08s,filter .15s;}
+  button:hover{filter:brightness(1.08);} button:active{transform:translateY(1px);}
+  button.ghost{background:#23232f;color:var(--txt);}
+  button:disabled{opacity:.45;cursor:not-allowed;filter:none;}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .mut{color:var(--mut);} .sp{margin-top:9px;}
+  .pill{font-size:12px;padding:4px 11px;border-radius:999px;background:#23232f;color:var(--mut);}
+  .pill.ok{color:var(--ok);background:rgba(61,220,151,.12);}
+  .pill.warn{color:var(--warn);background:rgba(255,184,77,.12);}
+  .step{color:var(--mut);font-size:13px;margin-top:10px;min-height:18px;}
+  .step.run::before{content:"";display:inline-block;width:9px;height:9px;border-radius:50%;
+     background:var(--acc2);margin-right:7px;animation:pulse 1s infinite;}
+  @keyframes pulse{0%,100%{opacity:.3;}50%{opacity:1;}}
+  video,img.thumb{width:100%;border-radius:12px;border:1px solid var(--line);margin-top:12px;}
+  .seg{display:inline-flex;background:#0c0c14;border:1px solid var(--line);border-radius:11px;overflow:hidden;}
+  .seg label{padding:9px 15px;cursor:pointer;color:var(--mut);font-size:14px;}
+  .seg input{display:none;}
+  .seg input:checked + span{background:var(--grad);color:#fff;border-radius:9px;padding:9px 15px;display:inline-block;margin:-9px -15px;}
+  input[type=range]{width:100%;accent-color:var(--acc);}
+  .hidden{display:none;} a.dl{color:var(--txt);text-decoration:none;}
+  .hint{color:var(--mut);font-size:12.5px;margin:4px 0 0;}
 </style>
 </head>
 <body>
-<header>yta <span>studio</span> — generate &amp; publish</header>
+<header>
+  <div class="logo">yta <b>studio</b></div>
+  <div class="tag">generate · brand · publish — any channel, any niche</div>
+</header>
 <main>
 
   <div class="card">
-    <h2>0 · Channel</h2>
-    <div class="row">
-      <select id="profile" style="flex:1" title="Pick a preset"></select>
-      <select id="language" title="Narration language — sets voice & outro automatically"></select>
+    <h2><span class="badge">0</span> Channel</h2>
+    <div class="grid2">
+      <select id="profile" title="Pick a preset"></select>
+      <select id="language" title="Language — auto-sets voice & outro"></select>
     </div>
-    <input id="chName" type="text" placeholder="Channel name — e.g. TheStoryBoardz" style="margin-top:8px" />
-    <input id="niche" type="text" placeholder="Niche — e.g. 'Hindi animated horror stories with a twist'" style="margin-top:8px" />
-    <div class="row" style="margin-top:8px">
-      <span class="mut">Voice auto-set: <b id="voiceLabel">—</b> · <b id="estLen">~0:00</b></span>
-      <button class="ghost" id="advToggle" type="button" style="margin-left:auto;padding:6px 12px">Advanced ▸</button>
+    <input id="chName" class="sp" type="text" placeholder="Channel name — e.g. TheStoryBoardz" />
+    <input id="niche" class="sp" type="text" placeholder="Niche — e.g. 'Hindi animated horror stories with a twist ending'" />
+    <div class="row sp">
+      <span class="pill" id="voicePill">voice: —</span>
+      <span class="pill" id="lenPill">~0:00</span>
+      <button class="ghost" id="advToggle" type="button" style="margin-left:auto;padding:7px 13px">Advanced ▸</button>
     </div>
-    <div id="advanced" class="hidden" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">
-      <div class="row">
+    <div id="advanced" class="hidden sp">
+      <div class="grid2">
         <select id="voice" title="Override voice"></select>
-        <input id="scenes" type="text" style="width:80px" title="Scenes" placeholder="scenes" />
+        <input id="scenes" type="text" placeholder="scenes (e.g. 16)" />
       </div>
-      <input id="tone" type="text" placeholder="Tone — e.g. 'suspenseful, eerie'" style="margin-top:8px" />
-      <input id="artStyle" type="text" placeholder="Art style — e.g. '2D animated horror, moonlight, shadows'" style="margin-top:8px" />
-      <input id="outro" type="text" placeholder="Outro / subscribe text" style="margin-top:8px" />
+      <input id="tone" class="sp" type="text" placeholder="Tone — e.g. 'suspenseful, eerie, chilling'" />
+      <input id="artStyle" class="sp" type="text" placeholder="Art style — e.g. '2D animated horror, moonlight, heavy shadows'" />
+      <input id="outro" class="sp" type="text" placeholder="Outro / subscribe text" />
     </div>
   </div>
 
   <div class="card">
-    <h2>1 · Script</h2>
+    <h2><span class="badge">1</span> Script</h2>
     <div class="row">
-      <input id="topic" type="text" placeholder="Topic / brief (e.g. 'a haunted lift') — leave blank for a fresh idea" />
-      <button id="genScript">Generate Script</button>
+      <input id="topic" type="text" placeholder="Topic / brief — e.g. 'a haunted wall clock' (blank = fresh idea)" style="flex:1" />
+      <button id="genScript">✨ Generate</button>
     </div>
-    <p class="mut" style="margin:10px 0 4px">…or paste your own script JSON:</p>
-    <textarea id="paste" placeholder='{"title":"...","scenes":[{"id":1,"narration":"...","image_prompt":"..."}], "thumbnail":{"subject":"...","hook":"...","mood":"..."}}'></textarea>
-    <div class="row" style="margin-top:8px"><button class="ghost" id="usePaste">Use Pasted</button>
+    <p class="hint">…or paste your own script JSON below and click Use Pasted.</p>
+    <textarea id="paste" placeholder='{"title":"...","scenes":[{"id":1,"narration":"...","image_prompt":"..."}],"thumbnail":{"subject":"...","hook":"...","mood":"..."}}'></textarea>
+    <div class="row sp"><button class="ghost" id="usePaste">Use Pasted</button>
       <span id="scriptInfo" class="pill">no script yet</span></div>
-    <textarea id="scriptView" class="hidden" style="margin-top:10px;min-height:160px"></textarea>
+    <textarea id="scriptView" class="hidden sp" style="min-height:160px"></textarea>
   </div>
 
   <div class="card">
-    <h2>2 · Background music</h2>
-    <div class="row">
-      <label class="r"><input type="radio" name="music" value="generate" checked> Generate (ambient)</label>
-      <label class="r"><input type="radio" name="music" value="upload"> Upload</label>
-      <label class="r"><input type="radio" name="music" value="none"> None</label>
+    <h2><span class="badge">2</span> Background music</h2>
+    <div class="seg" id="musicSeg">
+      <label><input type="radio" name="music" value="generate" checked><span>Generate</span></label>
+      <label><input type="radio" name="music" value="upload"><span>Upload</span></label>
+      <label><input type="radio" name="music" value="none"><span>None</span></label>
     </div>
-    <div class="row" style="margin-top:8px"><input id="musicFile" type="file" accept="audio/*" class="hidden"></div>
-    <div style="margin-top:10px">
-      <span class="mut">3 · Intensity: <b id="intVal">0.32</b></span>
-      <input id="intensity" type="range" min="0" max="1" step="0.02" value="0.32" style="width:100%">
-    </div>
+    <input id="musicFile" type="file" accept="audio/*" class="hidden sp">
+    <div class="sp"><span class="mut">Intensity: <b id="intVal">0.32</b></span>
+      <input id="intensity" type="range" min="0" max="1" step="0.02" value="0.32"></div>
   </div>
 
   <div class="card">
-    <h2>4 · Generate audio + video</h2>
-    <button id="genVideo" disabled>Generate Video</button>
+    <h2><span class="badge">3</span> Generate video</h2>
+    <button id="genVideo" disabled>🎬 Generate audio + video</button>
     <div id="videoStep" class="step"></div>
     <video id="player" class="hidden" controls></video>
   </div>
 
   <div class="card">
-    <h2>5 · Thumbnail</h2>
-    <button id="genThumb" class="ghost" disabled>Create / Regenerate Thumbnail</button>
+    <h2><span class="badge">4</span> Thumbnail</h2>
+    <button id="genThumb" class="ghost" disabled>🖼 Create / Regenerate</button>
     <div id="thumbStep" class="step"></div>
     <img id="thumbImg" class="thumb hidden" />
   </div>
 
   <div class="card">
-    <h2>6 · Final video &amp; 7 · Publish</h2>
+    <h2><span class="badge">5</span> Publish</h2>
     <div class="row">
+      <select id="ytAccount" style="flex:1" title="Connected YouTube channel"></select>
+      <button class="ghost" id="connectYt">+ Connect channel</button>
+    </div>
+    <div id="connectStep" class="step"></div>
+    <div class="row sp">
       <a id="download" class="dl hidden" download><button class="ghost">⬇ Download MP4</button></a>
-      <button id="upload" disabled>Upload to YouTube</button>
-      <span id="ytStatus" class="pill">checking YouTube…</span>
+      <button id="upload" disabled>▶ Upload to YouTube</button>
     </div>
     <div id="uploadStep" class="step"></div>
   </div>
 
 </main>
 <script>
-let script = null, work = null, profiles = {}, langDefaults = {}, voiceMap = {};
-const $ = id => document.getElementById(id);
-const musicMode = () => document.querySelector('input[name=music]:checked').value;
+let script=null, work=null, profiles={}, langDefaults={}, voiceMap={};
+const $=id=>document.getElementById(id);
+const musicMode=()=>document.querySelector('input[name=music]:checked').value;
 
 function updateMeta(){
-  const v = $('voice').value;
-  $('voiceLabel').textContent = voiceMap[v] || v || '—';
-  const secs = (parseInt($('scenes').value)||16) * 13 + 7;  // ~13s/scene + intro/outro
-  $('estLen').textContent = '~' + Math.floor(secs/60) + ':' + String(secs%60).padStart(2,'0');
+  $('voicePill').textContent='voice: '+(voiceMap[$('voice').value]||$('voice').value||'—');
+  const s=(parseInt($('scenes').value)||16)*13+7;
+  $('lenPill').textContent='~'+Math.floor(s/60)+':'+String(s%60).padStart(2,'0');
 }
-function applyLang(){               // language drives voice + outro automatically
-  const d = langDefaults[$('language').value]; if(!d) return;
-  $('voice').value = d.voice_speaker;
-  $('outro').value = ($('chName').value || 'Subscribe') + ' — ' + d.subscribe;
-  updateMeta();
-}
-function fillChannel(c){
-  $('chName').value = c.name||''; $('niche').value = c.niche||'';
-  $('tone').value = c.tone||''; $('artStyle').value = c.art_style||'';
-  $('outro').value = c.outro_text||''; $('scenes').value = c.scenes||16;
-  if(c.language) $('language').value = c.language;
-  if(c.voice_speaker) $('voice').value = c.voice_speaker;
-  updateMeta();
-}
-function buildChannel(){
-  return { name:$('chName').value, niche:$('niche').value, tone:$('tone').value,
-    art_style:$('artStyle').value, outro_text:$('outro').value,
-    language:$('language').value, language_name:$('language').selectedOptions[0].textContent,
-    voice_speaker:$('voice').value, scenes:parseInt($('scenes').value)||16 };
-}
+function applyLang(){const d=langDefaults[$('language').value];if(!d)return;
+  $('voice').value=d.voice_speaker;$('outro').value=($('chName').value||'Subscribe')+' — '+d.subscribe;updateMeta();}
+function fillChannel(c){$('chName').value=c.name||'';$('niche').value=c.niche||'';
+  $('tone').value=c.tone||'';$('artStyle').value=c.art_style||'';$('outro').value=c.outro_text||'';
+  $('scenes').value=c.scenes||16;if(c.language)$('language').value=c.language;
+  if(c.voice_speaker)$('voice').value=c.voice_speaker;updateMeta();}
+function buildChannel(){return{name:$('chName').value,niche:$('niche').value,tone:$('tone').value,
+  art_style:$('artStyle').value,outro_text:$('outro').value,language:$('language').value,
+  language_name:$('language').selectedOptions[0].textContent,voice_speaker:$('voice').value,
+  scenes:parseInt($('scenes').value)||16};}
+
+async function poll(jid,onStep){while(true){const j=await(await fetch('/api/job/'+jid)).json();
+  onStep(j.step||'');if(j.status==='done')return j.result;if(j.status==='error')throw new Error(j.error||'failed');
+  await new Promise(r=>setTimeout(r,1500));}}
+function running(el,t){el.className='step run';el.textContent=t;}
+function ok(el,t){el.className='step';el.innerHTML='<span style="color:var(--ok)">✓ '+t+'</span>';}
+function fail(el,t){el.className='step';el.innerHTML='<span style="color:var(--acc)">✗ '+t+'</span>';}
+
 async function initChannels(){
-  const d = await (await fetch('/api/channels')).json();
-  profiles = d.profiles||{}; langDefaults = d.lang_defaults||{};
-  d.voices.forEach(v => voiceMap[v.id] = v.label);
-  $('language').innerHTML = d.languages.map(l=>`<option value="${l.code}">${l.label}</option>`).join('');
-  $('voice').innerHTML = d.voices.map(v=>`<option value="${v.id}">${v.label}</option>`).join('');
-  const names = Object.keys(profiles);
-  $('profile').innerHTML = ['<option value="">— custom —</option>',
-    ...names.map(n=>`<option value="${n}">${n}</option>`)].join('');
-  if(names.length){ $('profile').value = names[0]; fillChannel(profiles[names[0]]); }
-  else fillChannel(d.default||{});
-  $('profile').onchange = () => fillChannel($('profile').value ? profiles[$('profile').value] : d.default);
-  $('language').onchange = applyLang;
-  $('voice').onchange = updateMeta; $('scenes').oninput = updateMeta;
-  $('advToggle').onclick = () => { const a=$('advanced'); a.classList.toggle('hidden');
-    $('advToggle').textContent = a.classList.contains('hidden') ? 'Advanced ▸' : 'Advanced ▾'; };
+  const d=await(await fetch('/api/channels')).json();
+  profiles=d.profiles||{};langDefaults=d.lang_defaults||{};d.voices.forEach(v=>voiceMap[v.id]=v.label);
+  $('language').innerHTML=d.languages.map(l=>`<option value="${l.code}">${l.label}</option>`).join('');
+  $('voice').innerHTML=d.voices.map(v=>`<option value="${v.id}">${v.label}</option>`).join('');
+  const names=Object.keys(profiles);
+  $('profile').innerHTML=['<option value="">— custom —</option>',...names.map(n=>`<option value="${n}">${n}</option>`)].join('');
+  if(names.length){$('profile').value=names[0];fillChannel(profiles[names[0]]);}else fillChannel(d.default||{});
+  $('profile').onchange=()=>fillChannel($('profile').value?profiles[$('profile').value]:d.default);
+  $('language').onchange=applyLang;$('voice').onchange=updateMeta;$('scenes').oninput=updateMeta;
+  $('advToggle').onclick=()=>{const a=$('advanced');a.classList.toggle('hidden');
+    $('advToggle').textContent=a.classList.contains('hidden')?'Advanced ▸':'Advanced ▾';};
 }
-initChannels();
+function setScript(s){script=s;$('scriptView').classList.remove('hidden');
+  $('scriptView').value=JSON.stringify(s,null,2);
+  $('scriptInfo').textContent=(s.title||'untitled')+' · '+(s.scenes?.length||0)+' scenes';
+  $('genVideo').disabled=false;}
 
-$('intensity').oninput = e => $('intVal').textContent = e.target.value;
-document.querySelectorAll('input[name=music]').forEach(r => r.onchange = () =>
-  $('musicFile').classList.toggle('hidden', musicMode() !== 'upload'));
+$('intensity').oninput=e=>$('intVal').textContent=e.target.value;
+document.querySelectorAll('input[name=music]').forEach(r=>r.onchange=()=>
+  $('musicFile').classList.toggle('hidden',musicMode()!=='upload'));
 
-function setScript(s){ script = s; $('scriptView').classList.remove('hidden');
-  $('scriptView').value = JSON.stringify(s, null, 2);
-  $('scriptInfo').textContent = (s.title||'untitled') + ' · ' + (s.scenes?.length||0) + ' scenes';
-  $('genVideo').disabled = false; }
+$('genScript').onclick=async()=>{$('genScript').disabled=true;$('scriptInfo').textContent='generating…';
+  try{setScript(await(await fetch('/api/script',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({topic:$('topic').value,channel:buildChannel()})})).json());}
+  catch(e){$('scriptInfo').textContent='error';alert(e);}$('genScript').disabled=false;};
+$('usePaste').onclick=async()=>{try{setScript(await(await fetch('/api/script',{method:'POST',
+  headers:{'Content-Type':'application/json'},body:JSON.stringify({script:$('paste').value})})).json());}
+  catch(e){alert('Invalid script JSON');}};
 
-async function poll(jid, onStep){
-  while(true){
-    const j = await (await fetch('/api/job/'+jid)).json();
-    onStep(j.step||'');
-    if(j.status==='done') return j.result;
-    if(j.status==='error') throw new Error(j.error||'failed');
-    await new Promise(r=>setTimeout(r,1500));
-  }
-}
+$('genVideo').onclick=async()=>{try{script=JSON.parse($('scriptView').value);}catch(e){return alert('Script JSON invalid');}
+  $('genVideo').disabled=true;$('player').classList.add('hidden');
+  const fd=new FormData();fd.append('script',JSON.stringify(script));fd.append('music_mode',musicMode());
+  fd.append('music_intensity',$('intensity').value);fd.append('channel',JSON.stringify(buildChannel()));
+  if(musicMode()==='upload'&&$('musicFile').files[0])fd.append('music_file',$('musicFile').files[0]);
+  try{const{job_id}=await(await fetch('/api/generate',{method:'POST',body:fd})).json();
+    const res=await poll(job_id,s=>running($('videoStep'),s));work=res.work;ok($('videoStep'),'video ready');
+    $('player').src=res.video_url+'?t='+Date.now();$('player').classList.remove('hidden');
+    $('genThumb').disabled=false;$('upload').disabled=false;
+    $('download').href='/api/download/'+work;$('download').classList.remove('hidden');}
+  catch(e){fail($('videoStep'),e.message);}$('genVideo').disabled=false;};
 
-$('genScript').onclick = async () => {
-  $('genScript').disabled = true; $('scriptInfo').textContent='generating…';
-  try { setScript(await (await fetch('/api/script',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({topic:$('topic').value, channel:buildChannel()})})).json()); }
-  catch(e){ $('scriptInfo').textContent='error'; alert(e); }
-  $('genScript').disabled = false;
-};
-$('usePaste').onclick = async () => {
-  try { setScript(await (await fetch('/api/script',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({script:$('paste').value})})).json()); }
-  catch(e){ alert('Invalid script JSON'); }
-};
+$('genThumb').onclick=async()=>{$('genThumb').disabled=true;
+  try{const{job_id}=await(await fetch('/api/thumbnail',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({work})})).json();const res=await poll(job_id,s=>running($('thumbStep'),s));
+    ok($('thumbStep'),'thumbnail ready');$('thumbImg').src=res.thumb_url;$('thumbImg').classList.remove('hidden');}
+  catch(e){fail($('thumbStep'),e.message);}$('genThumb').disabled=false;};
 
-$('genVideo').onclick = async () => {
-  try { script = JSON.parse($('scriptView').value); } catch(e){ return alert('Script JSON invalid'); }
-  $('genVideo').disabled = true; $('player').classList.add('hidden');
-  const fd = new FormData();
-  fd.append('script', JSON.stringify(script));
-  fd.append('music_mode', musicMode());
-  fd.append('music_intensity', $('intensity').value);
-  fd.append('channel', JSON.stringify(buildChannel()));
-  if(musicMode()==='upload' && $('musicFile').files[0]) fd.append('music_file', $('musicFile').files[0]);
-  try {
-    const {job_id} = await (await fetch('/api/generate',{method:'POST',body:fd})).json();
-    const res = await poll(job_id, s => $('videoStep').textContent = '⏳ ' + s);
-    work = res.work;
-    $('videoStep').innerHTML = '<span class=ok>✓ video ready</span>';
-    $('player').src = res.video_url + '?t=' + Date.now(); $('player').classList.remove('hidden');
-    $('genThumb').disabled = false; $('upload').disabled = false;
-    $('download').href = '/api/download/'+work; $('download').classList.remove('hidden');
-  } catch(e){ $('videoStep').innerHTML = '<span class=err>✗ '+e.message+'</span>'; }
-  $('genVideo').disabled = false;
-};
+async function loadAccounts(sel){const d=await(await fetch('/api/youtube/accounts')).json();
+  const a=d.accounts||[];$('ytAccount').innerHTML=a.length
+    ?a.map(x=>`<option value="${x.id}">${x.title}</option>`).join('')
+    :'<option value="">— no channel connected —</option>';
+  if(sel)$('ytAccount').value=sel;}
+$('connectYt').onclick=async()=>{$('connectYt').disabled=true;running($('connectStep'),'opening Google consent in your browser…');
+  try{const{job_id}=await(await fetch('/api/youtube/connect',{method:'POST'})).json();
+    const res=await poll(job_id,s=>running($('connectStep'),s));ok($('connectStep'),'connected: '+res.title);
+    await loadAccounts(res.id);}catch(e){fail($('connectStep'),e.message);}$('connectYt').disabled=false;};
 
-$('genThumb').onclick = async () => {
-  $('genThumb').disabled = true;
-  try {
-    const {job_id} = await (await fetch('/api/thumbnail',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({work})})).json();
-    const res = await poll(job_id, s => $('thumbStep').textContent = '⏳ ' + s);
-    $('thumbStep').innerHTML = '<span class=ok>✓ thumbnail ready</span>';
-    $('thumbImg').src = res.thumb_url; $('thumbImg').classList.remove('hidden');
-  } catch(e){ $('thumbStep').innerHTML = '<span class=err>✗ '+e.message+'</span>'; }
-  $('genThumb').disabled = false;
-};
+$('upload').onclick=async()=>{$('upload').disabled=true;
+  try{const{job_id}=await(await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({work,account_id:$('ytAccount').value||null})})).json();
+    const res=await poll(job_id,s=>running($('uploadStep'),s));
+    $('uploadStep').className='step';$('uploadStep').innerHTML='<span style="color:var(--ok)">✓ uploaded ('+res.privacy+'): </span>'+
+      '<a class=dl style="color:var(--acc2)" href="'+res.youtube_url+'" target=_blank>'+res.youtube_url+'</a>';}
+  catch(e){fail($('uploadStep'),e.message);}$('upload').disabled=false;};
 
-$('upload').onclick = async () => {
-  $('upload').disabled = true;
-  try {
-    const {job_id} = await (await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({work})})).json();
-    const res = await poll(job_id, s => $('uploadStep').textContent = '⏳ ' + s);
-    $('uploadStep').innerHTML = '<span class=ok>✓ uploaded ('+res.privacy+'): </span>'+
-      '<a class=dl href="'+res.youtube_url+'" target=_blank>'+res.youtube_url+'</a>';
-  } catch(e){ $('uploadStep').innerHTML = '<span class=err>✗ '+e.message+'</span>'; }
-  $('upload').disabled = false;
-};
-
-fetch('/api/youtube/status').then(r=>r.json()).then(d=>{
-  $('ytStatus').textContent = d.connected ? '✓ YouTube connected' : '⚠ YouTube not connected (.env)';
-  $('ytStatus').className = 'pill ' + (d.connected?'ok':'');
-});
+initChannels();loadAccounts();
 </script>
 </body>
 </html>

@@ -9,3 +9,4 @@ venv/
 assets/watermark/*.png
 *.mp4
 *.srt
+artifacts/
