@@ -65,14 +65,15 @@ def produce(language: str = "hi", reuse_script: Path | None = None,
         script.scenes, images, audios, work / "finish",
         intro_title=script.title_hi, outro_text=OUTRO)
     url = upload_and_sign(finished, f"produce/{work.name}.mp4")
-    res = asyncio.run(klipr.caption_burn(url, ass))
+    res = asyncio.run(klipr.caption_burn(url, ass, watermark=False))
     import httpx
     raw = work / "captioned.mp4"
     with httpx.stream("GET", res.download_url, timeout=600) as r:
         r.raise_for_status()
         raw.write_bytes(r.read())
-    # Brand overlay: TheStoryBoardz logo at footer-right.
+    # Brand overlays: Klipr logo top-right, TheStoryBoardz logo bottom-right.
     branded = add_logos(raw, work / "branded.mp4",
+                        tr_logo=ROOT / "assets" / "logos" / "klipr.png",
                         br_logo=ROOT / "assets" / "logo_trans_white_letter.png")
     final = player_safe(branded, work / "final.mp4")
     print("final video:", final)

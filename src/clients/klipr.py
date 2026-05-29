@@ -103,9 +103,12 @@ class KliprClient:
 
     # ------------------------------------------------------------------ caption burn
     async def caption_burn(self, source_url: str, ass: str,
-                           source_mime: str = "video/mp4") -> JobResult:
-        """Burn an ASS subtitle stream; synchronous, returns a download URL."""
-        payload = {"source_url": source_url, "ass": ass, "source_mime": source_mime}
+                           source_mime: str = "video/mp4",
+                           watermark: bool = True) -> JobResult:
+        """Burn an ASS subtitle stream; synchronous, returns a download URL.
+        Set watermark=False to skip klipr's automatic mark (we add our own)."""
+        payload = {"source_url": source_url, "ass": ass, "source_mime": source_mime,
+                   "watermark": watermark}
         async with httpx.AsyncClient(timeout=self.timeout * 5) as http:
             r = await http.post(f"{self.base_url}/caption-burn", json=payload, headers=self._headers)
         self._raise_for(r)

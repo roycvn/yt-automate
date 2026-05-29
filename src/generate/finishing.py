@@ -110,14 +110,23 @@ def _mix_drone(video: Path, drone: Path, out: Path) -> Path:
 
 def add_logos(src: Path, out: Path, *, right_logo: Path | None = None,
               bottom_logo: Path | None = None, br_logo: Path | None = None,
+              tr_logo: Path | None = None,
               right_scale: float = 0.12, bottom_scale: float = 0.20,
-              br_scale: float = 0.16, opacity: float = 0.9, margin: int = 36) -> Path:
-    """Overlay branding. `right_logo` mid-right, `bottom_logo` bottom-center,
-    `br_logo` bottom-right (footer). Missing logos are skipped. Re-encodes once."""
+              br_scale: float = 0.16, tr_scale: float = 0.12,
+              opacity: float = 0.9, margin: int = 36) -> Path:
+    """Overlay branding. `tr_logo` top-right, `right_logo` mid-right,
+    `bottom_logo` bottom-center, `br_logo` bottom-right (footer). Missing logos
+    are skipped. Re-encodes once."""
     inputs = ["-i", str(src)]
     filters: list[str] = []
     last = "0:v"
     idx = 1
+    if tr_logo and tr_logo.exists():
+        inputs += ["-i", str(tr_logo)]
+        filters.append(
+            f"[{idx}]format=rgba,colorchannelmixer=aa={opacity},scale=iw*{tr_scale}:-1[tr]")
+        filters.append(f"[{last}][tr]overlay=W-w-{margin}:{margin}[v{idx}]")
+        last = f"v{idx}"; idx += 1
     if right_logo and right_logo.exists():
         inputs += ["-i", str(right_logo)]
         filters.append(
