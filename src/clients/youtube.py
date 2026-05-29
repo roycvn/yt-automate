@@ -41,6 +41,37 @@ class YouTubeClient:
         )
         return build("youtube", "v3", credentials=creds, cache_discovery=False)
 
+    def upload_from_file(self, path, title: str, description: str = "",
+                         tags: list[str] | None = None,
+                         privacy: Literal["private", "unlisted", "public"] = "private",
+                         publish_at: datetime | None = None,
+                         language: str | None = None,
+                         made_for_kids: bool = False) -> str:
+        """Upload a local video file. Returns the YouTube video id."""
+        from googleapiclient.http import MediaFileUpload
+
+        status: dict = {"privacyStatus": privacy, "selfDeclaredMadeForKids": made_for_kids}
+        if publish_at is not None:
+            status["privacyStatus"] = "private"
+            status["publishAt"] = publish_at.isoformat()
+        snippet: dict = {"title": title[:100], "description": description[:5000],
+                         "tags": (tags or [])[:30]}
+        if language:
+            snippet["defaultAudioLanguage"] = language
+            snippet["defaultLanguage"] = language
+
+        media = MediaFileUpload(str(path), mimetype="video/mp4",
+                                chunksize=8 * 1024 * 1024, resumable=True)
+        request = self._service().videos().insert(
+            part="snippet,status",
+            body={"snippet": snippet, "status": status},
+            media_body=media,
+        )
+        response = None
+        while response is None:
+            _, response = request.next_chunk()
+        return response["id"]
+
     def upload_from_url(self, video_url: str, title: str, description: str = "",
                         tags: list[str] | None = None,
                         privacy: Literal["private", "unlisted", "public"] = "private",
