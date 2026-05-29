@@ -38,7 +38,13 @@ def main() -> None:
         },
         scopes=SCOPES,
     )
-    creds = flow.run_local_server(port=0)
+    # access_type=offline + prompt=consent forces Google to return a refresh
+    # token even if this client was authorized before (otherwise it's None).
+    creds = flow.run_local_server(port=0, access_type="offline", prompt="consent")
+    if not creds.refresh_token:
+        print("\n  No refresh token returned. Revoke prior access at "
+              "https://myaccount.google.com/permissions and re-run.\n")
+        return
     print("\n  Refresh token (set as YOUTUBE_REFRESH_TOKEN_<LANG> on Railway):\n")
     print(f"    {creds.refresh_token}\n")
 
