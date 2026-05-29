@@ -1,98 +1,185 @@
-"""KliprClient — built against the (not-yet-existing) klipr.in API contract in PLAN.md §6.
+"""KliprClient — HTTP client for the real klipr batch API (github.com/roycvn/yts).
 
-When config klipr.use_real_api is False, clipping falls back to local ffmpeg and dubbing
-routes to the dubbing engine. Flip the flag once api.klipr.in is live; no other code changes.
+Endpoints (base = https://klipr.in/api/batch), all authenticated with
+`Authorization: Bearer <KLIPR_API_KEY>`:
+
+  POST /dub          {source_type, source_url|source_external_url, target_language,
+                      source_language?}                       -> 202 {dub_id}
+  POST /auto-clip    {source_type, source_url|source_external_url, ...}
+                                                              -> 202 {job_id}
+  POST /caption-burn {source_url, ass, source_mime?}          -> {output_key, download_url}
+  POST /watermark    {source_url, filename?}                  -> streamed mp4 bytes
+  GET  /jobs/{id}?kind=auto_clip|dub|caption_render          -> {job, download_url}
+
+Sources are URLs, not local files: `source_type="youtube"` with a YouTube
+`source_url`, or `source_type="upload"` with a Firebase Storage
+`source_external_url`. Dub targets use short ISO codes (te, hi, ta, …).
 """
 from __future__ import annotations
 
+import asyncio
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 import httpx
 
-from ..models import ClipSet, Language, LocalizedMaster
-from .. import ffmpeg_ops
+SourceType = Literal["youtube", "upload"]
+JobKind = Literal["auto_clip", "dub", "caption_render"]
+TERMINAL = {"ready", "failed"}
+
+
+@dataclass
+class JobResult:
+    id: str
+    kind: JobKind
+    status: str
+    download_url: str | None
+    error_message: str | None
+    raw: dict
+
+
+class KliprError(RuntimeError):
+    pass
 
 
 class KliprClient:
-    def __init__(self, api_key: str | None, base_url: str, use_real_api: bool,
-                 dubbing_client=None, artifacts_dir: Path = Path("./artifacts")):
+    def __init__(self, api_key: str, base_url: str = "https://klipr.in/api/batch",
+                 timeout: float = 60.0):
+        if not api_key:
+            raise ValueError("KLIPR_API_KEY is required")
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
-        self.use_real_api = use_real_api
-        self.dubbing = dubbing_client
-        self.artifacts_dir = artifacts_dir
+        self.timeout = timeout
 
-    # ------------------------------------------------------------------ clip
-    async def clip(self, source: Path, language: Language, master_id: str,
-                   count: int = 8, max_duration_s: int = 60) -> ClipSet:
-        if self.use_real_api:
-            return await self._clip_remote(source, language, master_id, count, max_duration_s)
-        return self._clip_local(source, language, master_id, count, max_duration_s)
+    @property
+    def _headers(self) -> dict:
+        return {"Authorization": f"Bearer {self.api_key}"}
 
-    async def _clip_remote(self, source, language, master_id, count, max_duration_s) -> ClipSet:
-        # POST /v1/clip -> {job_id}; poll GET /v1/jobs/{id}; download clips. (PLAN.md §6.1-6.2)
-        headers = {"Authorization": f"Bearer {self.api_key}"}
-        payload = {
-            "language": language.value,
-            "target": {"aspect": "9:16", "max_duration_s": max_duration_s, "count": count},
-            "captions": {"enabled": True, "burn_in": True},
-            "selection": "auto-highlights",
-        }
-        async with httpx.AsyncClient(timeout=60) as http:
-            # TODO: multipart upload of `source` or pre-signed URL exchange
-            r = await http.post(f"{self.base_url}/clip", json=payload, headers=headers)
-            r.raise_for_status()
-            job_id = r.json()["job_id"]
-            result = await self._poll(http, job_id, headers)
-        shorts, caps = [], []
-        for c in result.get("clips", []):
-            shorts.append(Path(c["url"]))            # TODO: download to artifacts_dir
-            if c.get("captions_url"):
-                caps.append(Path(c["captions_url"]))
-        return ClipSet(master_id=master_id, language=language, shorts=shorts, captions=caps)
-
-    def _clip_local(self, source, language, master_id, count, max_duration_s) -> ClipSet:
-        dur = ffmpeg_ops.probe_duration(source)
-        out_dir = self.artifacts_dir / master_id / "shorts"
-        out_dir.mkdir(parents=True, exist_ok=True)
-        shorts = []
-        # naive even segmentation as fallback; real klipr does highlight detection
-        step = max(dur / count, max_duration_s)
-        t = 0.0
-        i = 0
-        while t < dur and i < count:
-            end = min(t + max_duration_s, dur)
-            out = out_dir / f"short_{i:02d}.mp4"
-            ffmpeg_ops.clip_segment(source, t, end, out, vertical=True)
-            shorts.append(out)
-            t += step
-            i += 1
-        return ClipSet(master_id=master_id, language=language, shorts=shorts, captions=[])
+    @staticmethod
+    def _source_fields(source_type: SourceType, source_url: str) -> dict:
+        key = "source_url" if source_type == "youtube" else "source_external_url"
+        return {"source_type": source_type, key: source_url}
 
     # ------------------------------------------------------------------ dub
-    async def dub(self, source: Path, frm: Language, to: Language,
-                  source_id: str) -> LocalizedMaster:
-        if self.use_real_api:
-            return await self._dub_remote(source, frm, to, source_id)
-        if self.dubbing is None:
-            raise RuntimeError("No dubbing backend configured (klipr disabled, dubbing client missing)")
-        return await self.dubbing.dub(source, frm, to, source_id)
+    async def start_dub(self, source_url: str, target_language: str,
+                        source_type: SourceType = "youtube",
+                        source_language: str | None = None,
+                        source_title: str | None = None) -> str:
+        """Start a dub job; returns dub_id.
 
-    async def _dub_remote(self, source, frm, to, source_id) -> LocalizedMaster:
-        # POST /v1/dub (PLAN.md §6.3) — optional; only if klipr.in implements it.
-        raise NotImplementedError("klipr /v1/dub not implemented; keep use_real_api off for dubbing")
+        Note: the klipr /dub route runs the pipeline synchronously and only
+        responds once the dub is terminal (ready/failed), so this POST can take
+        up to klipr's 300s maxDuration. We give it a 310s read timeout. A
+        subsequent get_job() returns "ready" immediately.
+        """
+        payload = {**self._source_fields(source_type, source_url),
+                   "target_language": target_language}
+        if source_language:
+            payload["source_language"] = source_language
+        if source_title:
+            payload["source_title"] = source_title
+        timeout = httpx.Timeout(connect=15.0, read=310.0, write=60.0, pool=15.0)
+        async with httpx.AsyncClient(timeout=timeout) as http:
+            r = await http.post(f"{self.base_url}/dub", json=payload, headers=self._headers)
+        self._raise_for(r)
+        return r.json()["dub_id"]
 
-    # ------------------------------------------------------------------ poll
-    async def _poll(self, http: httpx.AsyncClient, job_id: str, headers: dict,
-                    interval: float = 3.0, max_tries: int = 200) -> dict:
-        import asyncio
-        for _ in range(max_tries):
-            r = await http.get(f"{self.base_url}/jobs/{job_id}", headers=headers)
-            r.raise_for_status()
-            data = r.json()
-            if data["status"] == "done":
-                return data
-            if data["status"] == "failed":
-                raise RuntimeError(f"klipr job {job_id} failed")
+    # ------------------------------------------------------------------ auto-clip
+    async def start_auto_clip(self, source_url: str,
+                              source_type: SourceType = "youtube",
+                              source_title: str | None = None,
+                              duration_seconds: float | None = None) -> str:
+        """Start an auto-clip (Shorts) job; returns job_id."""
+        payload = self._source_fields(source_type, source_url)
+        if source_title:
+            payload["source_title"] = source_title
+        if duration_seconds:
+            payload["duration_seconds"] = duration_seconds
+        async with httpx.AsyncClient(timeout=self.timeout) as http:
+            r = await http.post(f"{self.base_url}/auto-clip", json=payload, headers=self._headers)
+        self._raise_for(r)
+        return r.json()["job_id"]
+
+    # ------------------------------------------------------------------ caption burn
+    async def caption_burn(self, source_url: str, ass: str,
+                           source_mime: str = "video/mp4") -> JobResult:
+        """Burn an ASS subtitle stream; synchronous, returns a download URL."""
+        payload = {"source_url": source_url, "ass": ass, "source_mime": source_mime}
+        async with httpx.AsyncClient(timeout=self.timeout * 5) as http:
+            r = await http.post(f"{self.base_url}/caption-burn", json=payload, headers=self._headers)
+        self._raise_for(r)
+        body = r.json()
+        return JobResult(id=body.get("output_key", ""), kind="caption_render",
+                         status="ready", download_url=body.get("download_url"),
+                         error_message=None, raw=body)
+
+    # ------------------------------------------------------------------ watermark
+    async def watermark(self, source_url: str, dest: Path,
+                        filename: str | None = None) -> Path:
+        """Stream a watermarked MP4 to `dest`. source_url must be an R2/Firebase URL."""
+        payload = {"source_url": source_url}
+        if filename:
+            payload["filename"] = filename
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        async with httpx.AsyncClient(timeout=self.timeout * 5) as http:
+            async with http.stream("POST", f"{self.base_url}/watermark",
+                                   json=payload, headers=self._headers) as r:
+                if r.status_code >= 400:
+                    await r.aread()
+                    self._raise_for(r)
+                with open(dest, "wb") as f:
+                    async for chunk in r.aiter_bytes():
+                        f.write(chunk)
+        return dest
+
+    # ------------------------------------------------------------------ jobs
+    async def get_job(self, job_id: str, kind: JobKind) -> JobResult:
+        async with httpx.AsyncClient(timeout=self.timeout) as http:
+            r = await http.get(f"{self.base_url}/jobs/{job_id}",
+                               params={"kind": kind}, headers=self._headers)
+        self._raise_for(r)
+        body = r.json()
+        job = body.get("job", {})
+        return JobResult(id=job_id, kind=kind, status=job.get("status", "unknown"),
+                         download_url=body.get("download_url"),
+                         error_message=job.get("error_message"), raw=body)
+
+    async def wait_for_job(self, job_id: str, kind: JobKind,
+                           interval: float = 10.0, max_wait_s: float = 1800.0) -> JobResult:
+        """Poll until the job reaches a terminal state; raise on failure/timeout."""
+        waited = 0.0
+        while waited < max_wait_s:
+            res = await self.get_job(job_id, kind)
+            if res.status == "ready":
+                return res
+            if res.status == "failed":
+                raise KliprError(f"{kind} job {job_id} failed: {res.error_message}")
             await asyncio.sleep(interval)
-        raise TimeoutError(f"klipr job {job_id} did not finish")
+            waited += interval
+        raise TimeoutError(f"{kind} job {job_id} did not finish in {max_wait_s}s")
+
+    # ------------------------------------------------------------------ convenience
+    async def dub_and_wait(self, source_url: str, target_language: str,
+                           source_type: SourceType = "youtube",
+                           source_language: str | None = None,
+                           **poll) -> JobResult:
+        job_id = await self.start_dub(source_url, target_language, source_type, source_language)
+        return await self.wait_for_job(job_id, "dub", **poll)
+
+    async def auto_clip_and_wait(self, source_url: str,
+                                 source_type: SourceType = "youtube", **poll) -> JobResult:
+        job_id = await self.start_auto_clip(source_url, source_type)
+        return await self.wait_for_job(job_id, "auto_clip", **poll)
+
+    # ------------------------------------------------------------------ errors
+    @staticmethod
+    def _raise_for(r: httpx.Response) -> None:
+        if r.status_code < 400:
+            return
+        try:
+            body = r.json()
+        except Exception:
+            body = {"error": r.text[:300]}
+        raise KliprError(f"klipr {r.request.method} {r.request.url.path} "
+                         f"-> {r.status_code}: {body}")

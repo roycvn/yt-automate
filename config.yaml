@@ -35,8 +35,9 @@ publish:
   initial_privacy: private   # uploaded private with publishAt for scheduling
 
 klipr:
-  base_url: "https://api.klipr.in/v1"
-  use_real_api: false        # flip to true when api.klipr.in is live
+  base_url: "https://klipr.in/api/batch"   # real klipr batch API (github.com/roycvn/yts)
+  # API key comes from the KLIPR_API_KEY env var (see .env.example). Mint with
+  # klipr's scripts/mint-api-key.ts.
 
 storage:
   artifacts_dir: ./artifacts
