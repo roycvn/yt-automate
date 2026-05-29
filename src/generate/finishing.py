@@ -1,0 +1,108 @@
+"""Turn the raw body assembly into a finished video: intro/outro cards, an
+original ambient drone bed, and (via klipr) burned captions.
+
+Text rendering (title, captions, CTA) is deferred to klipr's libass pass for
+correct Devanagari/Telugu shaping — see captions.build_ass. Here we only build
+the silent video skeleton + audio bed.
+"""
+from __future__ import annotations
+
+import subprocess
+from pathlib import Path
+
+from .assemble import assemble
+from .captions import build_ass, wav_duration
+
+FPS = 30
+W, H = 1920, 1080
+INTRO_S = 3.0
+OUTRO_S = 4.0
+BG = "0x0A0A12"  # near-black, slight blue
+
+
+def _run(cmd: list[str]) -> None:
+    subprocess.run(cmd, check=True, capture_output=True)
+
+
+def _card(out: Path, dur: float) -> Path:
+    """A dark, silent video card of length `dur` (text burned later via ASS)."""
+    _run([
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-f", "lavfi", "-i", f"color=c={BG}:s={W}x{H}:r={FPS}:d={dur}",
+        "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+        "-t", f"{dur}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", str(out),
+    ])
+    return out
+
+
+def _drone(out: Path, dur: float) -> Path:
+    """Original low ambient tension bed (two detuned low sines + tremolo + lowpass)."""
+    _run([
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-f", "lavfi", "-i", f"sine=frequency=55:duration={dur}",
+        "-f", "lavfi", "-i", f"sine=frequency=82.5:duration={dur}",
+        "-filter_complex",
+        "[0][1]amix=inputs=2,tremolo=f=0.15:d=0.6,lowpass=f=180,volume=0.9",
+        "-t", f"{dur}", str(out),
+    ])
+    return out
+
+
+def _concat(clips: list[Path], out: Path) -> Path:
+    inputs: list[str] = []
+    for c in clips:
+        inputs += ["-i", str(c)]
+    n = len(clips)
+    streams = "".join(f"[{i}:v][{i}:a]" for i in range(n))
+    _run([
+        "ffmpeg", "-y", "-loglevel", "error", *inputs,
+        "-filter_complex", f"{streams}concat=n={n}:v=1:a=1[v][a]",
+        "-map", "[v]", "-map", "[a]",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", str(out),
+    ])
+    return out
+
+
+def _mix_drone(video: Path, drone: Path, out: Path) -> Path:
+    _run([
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", str(video), "-i", str(drone),
+        "-filter_complex",
+        "[1:a]volume=0.32[d];[0:a][d]amix=inputs=2:duration=first:dropout_transition=0[a]",
+        "-map", "0:v", "-map", "[a]",
+        "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", str(out),
+    ])
+    return out
+
+
+def player_safe(src: Path, out: Path) -> Path:
+    """Re-encode to a widely-compatible profile (QuickTime-safe) + faststart."""
+    _run([
+        "ffmpeg", "-y", "-loglevel", "error", "-i", str(src),
+        "-c:v", "libx264", "-profile:v", "high", "-pix_fmt", "yuv420p",
+        "-movflags", "+faststart", "-c:a", "aac", "-b:a", "160k", str(out),
+    ])
+    return out
+
+
+def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path],
+                            work: Path, *, intro_title: str, outro_text: str
+                            ) -> tuple[Path, str]:
+    """Produce the captionless finished video (intro+body+outro+drone) and the
+    ASS text to burn on it. Returns (video_path, ass_text)."""
+    work.mkdir(parents=True, exist_ok=True)
+    body = assemble(images, audios, work / "body.mp4", work / "body_work", W, H)
+    intro = _card(work / "intro.mp4", INTRO_S)
+    outro = _card(work / "outro.mp4", OUTRO_S)
+    joined = _concat([intro, body, outro], work / "joined.mp4")
+
+    body_dur = sum(max(wav_duration(a), 1.0) for a in audios)
+    total = INTRO_S + body_dur + OUTRO_S
+    drone = _drone(work / "drone.wav", total)
+    finished = _mix_drone(joined, drone, work / "finished_nocaps.mp4")
+
+    ass = build_ass(scenes, audios, intro_s=INTRO_S, outro_s=OUTRO_S,
+                    intro_title=intro_title, outro_text=outro_text)
+    return finished, ass
