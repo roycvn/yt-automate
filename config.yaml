@@ -15,6 +15,43 @@ channel:
   outro_text: "TheStoryBoardz — सब्सक्राइब करें 🔔"
   title_suffix: " | TheStoryBoardz"
 
+# Named presets the UI offers in the channel switcher. Selecting one fills the
+# editable fields; you can also customize live. `channel:` above is the default.
+profiles:
+  "Hindi Horror — TheStoryBoardz":
+    name: TheStoryBoardz
+    language: hi
+    language_name: "Hindi (Devanagari)"
+    niche: "Original Hindi animated horror stories — chudail/ghost/supernatural, an ordinary object that turns sinister, with a chilling twist"
+    tone: "suspenseful, eerie, chilling"
+    art_style: "2D animated horror cartoon, muted desaturated palette, moonlight, heavy shadows, cinematic"
+    voice_speaker: anushka
+    scenes: 16
+    outro_text: "TheStoryBoardz — सब्सक्राइब करें 🔔"
+    title_suffix: " | TheStoryBoardz"
+  "Telugu Horror — TheStoryBoardz":
+    name: TheStoryBoardz
+    language: te
+    language_name: "Telugu"
+    niche: "Original Telugu animated horror stories — deyyam/ghost/supernatural, ordinary object turns sinister, chilling twist"
+    tone: "suspenseful, eerie, chilling"
+    art_style: "2D animated horror cartoon, muted palette, moonlight, heavy shadows, cinematic"
+    voice_speaker: vidya
+    scenes: 16
+    outro_text: "TheStoryBoardz — సబ్‌స్క్రైబ్ చేయండి 🔔"
+    title_suffix: " | TheStoryBoardz"
+  "Hindi Moral Stories":
+    name: TheStoryBoardz
+    language: hi
+    language_name: "Hindi (Devanagari)"
+    niche: "Hindi moral / saas-bahu short stories with a heartwarming lesson"
+    tone: "warm, dramatic, emotional"
+    art_style: "2D animated cartoon, warm colors, soft lighting, family scenes"
+    voice_speaker: manisha
+    scenes: 12
+    outro_text: "TheStoryBoardz — सब्सक्राइब करें 🔔"
+    title_suffix: " | TheStoryBoardz"
+
 channels:
   hindi:
     youtube_channel_id: "UC_REPLACE_HINDI"

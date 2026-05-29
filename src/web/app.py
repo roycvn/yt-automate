@@ -44,6 +44,30 @@ app = FastAPI(title="yta studio")
 _pool = ThreadPoolExecutor(max_workers=2)
 _jobs: dict[str, dict] = {}
 
+# Sarvam bulbul:v2 speakers + supported languages for the UI pickers.
+VOICES = [
+    {"id": "anushka", "label": "Anushka (F)"}, {"id": "manisha", "label": "Manisha (F)"},
+    {"id": "vidya", "label": "Vidya (F)"}, {"id": "arya", "label": "Arya (F)"},
+    {"id": "abhilash", "label": "Abhilash (M)"}, {"id": "karun", "label": "Karun (M)"},
+    {"id": "hitesh", "label": "Hitesh (M)"},
+]
+LANGUAGES = [
+    {"code": "hi", "label": "Hindi"}, {"code": "te", "label": "Telugu"},
+    {"code": "ta", "label": "Tamil"}, {"code": "bn", "label": "Bengali"},
+    {"code": "kn", "label": "Kannada"}, {"code": "ml", "label": "Malayalam"},
+    {"code": "mr", "label": "Marathi"}, {"code": "gu", "label": "Gujarati"},
+    {"code": "pa", "label": "Punjabi"}, {"code": "od", "label": "Odia"},
+    {"code": "en", "label": "English"},
+]
+
+
+def _resolve_channel(override: dict | None) -> dict:
+    """Merge a UI channel override over the config default channel."""
+    base = dict(load_config().get("channel", {}))
+    if override:
+        base.update({k: v for k, v in override.items() if v not in (None, "")})
+    return base
+
 
 # ----------------------------------------------------------------- helpers
 def _script_from_dict(d: dict) -> StoryScript:
@@ -78,6 +102,13 @@ def index() -> str:
     return (STATIC / "index.html").read_text()
 
 
+@app.get("/api/channels")
+def api_channels() -> dict:
+    cfg = load_config()
+    return {"profiles": cfg.get("profiles", {}), "default": cfg.get("channel", {}),
+            "voices": VOICES, "languages": LANGUAGES}
+
+
 @app.post("/api/script")
 def api_script(payload: dict) -> dict:
     """Accept a pasted script (JSON) or generate one from a topic/brief."""
@@ -88,21 +119,22 @@ def api_script(payload: dict) -> dict:
         except json.JSONDecodeError:
             raise HTTPException(400, "Pasted script must be valid JSON (title, scenes[], ...).")
         return _script_from_dict(data).to_dict()
-    cfg = load_config()
-    s = generate_script(channel=cfg.get("channel", {}), theme=payload.get("topic") or None)
+    channel = _resolve_channel(payload.get("channel"))
+    s = generate_script(channel=channel, theme=payload.get("topic") or None)
     return s.to_dict()
 
 
 @app.post("/api/generate")
 async def api_generate(script: str = Form(...), music_mode: str = Form("generate"),
-                       music_intensity: float = Form(0.32),
+                       music_intensity: float = Form(0.32), channel: str = Form("{}"),
                        music_file: UploadFile | None = File(None)) -> dict:
     cfg = load_config()
-    channel = cfg.get("channel", {})
+    channel = _resolve_channel(json.loads(channel or "{}"))
     story = _script_from_dict(json.loads(script))
     work = WORK_ROOT / f"job-{int(time.time())}-{uuid.uuid4().hex[:6]}"
     work.mkdir(parents=True, exist_ok=True)
     (work / "script.json").write_text(json.dumps(story.to_dict(), ensure_ascii=False, indent=2))
+    (work / "channel.json").write_text(json.dumps(channel, ensure_ascii=False, indent=2))
 
     music_path = None
     if music_mode == "upload" and music_file is not None:
@@ -170,7 +202,9 @@ def api_thumbnail(payload: dict) -> dict:
 @app.post("/api/upload")
 def api_upload(payload: dict) -> dict:
     cfg = load_config()
-    channel = cfg.get("channel", {})
+    work_dir = WORK_ROOT / payload["work"]
+    ch_file = work_dir / "channel.json"
+    channel = json.loads(ch_file.read_text()) if ch_file.exists() else cfg.get("channel", {})
     language = channel.get("language", "hi")
     privacy = cfg.get("publish", {}).get("initial_privacy", "private")
     work = WORK_ROOT / payload["work"]

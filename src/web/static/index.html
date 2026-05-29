@@ -40,6 +40,23 @@
 <main>
 
   <div class="card">
+    <h2>0 · Channel</h2>
+    <div class="row">
+      <select id="profile" style="flex:1"></select>
+      <select id="language" title="Narration language"></select>
+      <select id="voice" title="Narrator voice"></select>
+      <input id="scenes" type="text" style="width:70px" title="Scenes" placeholder="scenes" />
+    </div>
+    <input id="chName" type="text" placeholder="Channel name" style="margin-top:8px" />
+    <input id="niche" type="text" placeholder="Niche / what this channel is about" style="margin-top:8px" />
+    <div class="row" style="margin-top:8px">
+      <input id="tone" type="text" placeholder="Tone" style="flex:1" />
+      <input id="artStyle" type="text" placeholder="Art style" style="flex:2" />
+    </div>
+    <input id="outro" type="text" placeholder="Outro / subscribe text" style="margin-top:8px" />
+  </div>
+
+  <div class="card">
     <h2>1 · Script</h2>
     <div class="row">
       <input id="topic" type="text" placeholder="Topic / brief (e.g. 'a haunted lift') — leave blank for a fresh idea" />
@@ -92,9 +109,35 @@
 
 </main>
 <script>
-let script = null, work = null;
+let script = null, work = null, profiles = {};
 const $ = id => document.getElementById(id);
 const musicMode = () => document.querySelector('input[name=music]:checked').value;
+
+function fillChannel(c){
+  $('chName').value = c.name||''; $('niche').value = c.niche||'';
+  $('tone').value = c.tone||''; $('artStyle').value = c.art_style||'';
+  $('outro').value = c.outro_text||''; $('scenes').value = c.scenes||16;
+  if(c.language) $('language').value = c.language;
+  if(c.voice_speaker) $('voice').value = c.voice_speaker;
+}
+function buildChannel(){
+  return { name:$('chName').value, niche:$('niche').value, tone:$('tone').value,
+    art_style:$('artStyle').value, outro_text:$('outro').value,
+    language:$('language').value, language_name:$('language').selectedOptions[0].textContent,
+    voice_speaker:$('voice').value, scenes:parseInt($('scenes').value)||16 };
+}
+async function initChannels(){
+  const d = await (await fetch('/api/channels')).json();
+  profiles = d.profiles||{};
+  $('language').innerHTML = d.languages.map(l=>`<option value="${l.code}">${l.label}</option>`).join('');
+  $('voice').innerHTML = d.voices.map(v=>`<option value="${v.id}">${v.label}</option>`).join('');
+  const names = Object.keys(profiles);
+  $('profile').innerHTML = ['<option value="">— default —</option>',
+    ...names.map(n=>`<option value="${n}">${n}</option>`)].join('');
+  fillChannel(d.default||{});
+  $('profile').onchange = () => fillChannel($('profile').value ? profiles[$('profile').value] : d.default);
+}
+initChannels();
 
 $('intensity').oninput = e => $('intVal').textContent = e.target.value;
 document.querySelectorAll('input[name=music]').forEach(r => r.onchange = () =>
@@ -118,7 +161,7 @@ async function poll(jid, onStep){
 $('genScript').onclick = async () => {
   $('genScript').disabled = true; $('scriptInfo').textContent='generating…';
   try { setScript(await (await fetch('/api/script',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({topic:$('topic').value})})).json()); }
+        body:JSON.stringify({topic:$('topic').value, channel:buildChannel()})})).json()); }
   catch(e){ $('scriptInfo').textContent='error'; alert(e); }
   $('genScript').disabled = false;
 };
@@ -135,6 +178,7 @@ $('genVideo').onclick = async () => {
   fd.append('script', JSON.stringify(script));
   fd.append('music_mode', musicMode());
   fd.append('music_intensity', $('intensity').value);
+  fd.append('channel', JSON.stringify(buildChannel()));
   if(musicMode()==='upload' && $('musicFile').files[0]) fd.append('music_file', $('musicFile').files[0]);
   try {
     const {job_id} = await (await fetch('/api/generate',{method:'POST',body:fd})).json();
