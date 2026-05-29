@@ -108,6 +108,39 @@ def _mix_drone(video: Path, drone: Path, out: Path) -> Path:
     return out
 
 
+def add_logos(src: Path, out: Path, *, right_logo: Path | None = None,
+              bottom_logo: Path | None = None, right_scale: float = 0.12,
+              bottom_scale: float = 0.20, opacity: float = 0.9, margin: int = 36) -> Path:
+    """Overlay branding: `right_logo` mid-right ("Made with Klipr"), `bottom_logo`
+    bottom-center (channel logo). Missing logos are skipped. Re-encodes once."""
+    inputs = ["-i", str(src)]
+    filters: list[str] = []
+    last = "0:v"
+    idx = 1
+    if right_logo and right_logo.exists():
+        inputs += ["-i", str(right_logo)]
+        filters.append(
+            f"[{idx}]format=rgba,colorchannelmixer=aa={opacity},scale=iw*{right_scale}:-1[r]")
+        filters.append(f"[{last}][r]overlay=W-w-{margin}:(H-h)/2[v{idx}]")
+        last = f"v{idx}"; idx += 1
+    if bottom_logo and bottom_logo.exists():
+        inputs += ["-i", str(bottom_logo)]
+        filters.append(
+            f"[{idx}]format=rgba,colorchannelmixer=aa={opacity},scale=iw*{bottom_scale}:-1[b]")
+        filters.append(f"[{last}][b]overlay=(W-w)/2:H-h-{margin}[v{idx}]")
+        last = f"v{idx}"; idx += 1
+    if not filters:
+        return src
+    _run([
+        "ffmpeg", "-y", "-loglevel", "error", *inputs,
+        "-filter_complex", ";".join(filters),
+        "-map", f"[{last}]", "-map", "0:a?",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-pix_fmt", "yuv420p", "-c:a", "copy", str(out),
+    ])
+    return out
+
+
 def player_safe(src: Path, out: Path) -> Path:
     """Re-encode to a widely-compatible profile (QuickTime-safe) + faststart."""
     _run([

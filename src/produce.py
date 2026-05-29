@@ -19,7 +19,7 @@ from pathlib import Path
 from .generate.script import generate_script, StoryScript, Scene
 from .generate.images import generate_scene_images
 from .generate.voice import synthesize_scenes
-from .generate.finishing import build_finished_skeleton, player_safe
+from .generate.finishing import build_finished_skeleton, player_safe, add_logos
 from .generate.thumbnail import make_thumbnail
 from .generate import seo
 from .clients.klipr import KliprClient
@@ -71,7 +71,12 @@ def produce(language: str = "hi", reuse_script: Path | None = None,
     with httpx.stream("GET", res.download_url, timeout=600) as r:
         r.raise_for_status()
         raw.write_bytes(r.read())
-    final = player_safe(raw, work / "final.mp4")
+    # Brand overlays: "Made with Klipr" (mid-right) + TheStoryBoardz (bottom).
+    logos = ROOT / "assets" / "logos"
+    branded = add_logos(raw, work / "branded.mp4",
+                        right_logo=logos / "klipr.png",
+                        bottom_logo=logos / "storyboardz.png")
+    final = player_safe(branded, work / "final.mp4")
     print("final video:", final)
 
     thumb = make_thumbnail(script.title_hi, work / "thumb",

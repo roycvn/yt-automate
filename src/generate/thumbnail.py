@@ -30,7 +30,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Thumb,Noto Sans Devanagari,110,&H0000F0FF,&H00000020,&H00000000,1,0,1,8,4,8,40,40,40,1
+Style: Thumb,Noto Sans Devanagari,180,&H0000F0FF,&H00000000,&H00000000,1,0,1,14,7,8,60,60,60,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
