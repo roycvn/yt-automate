@@ -42,18 +42,24 @@
   <div class="card">
     <h2>0 · Channel</h2>
     <div class="row">
-      <select id="profile" style="flex:1"></select>
-      <select id="language" title="Narration language"></select>
-      <select id="voice" title="Narrator voice"></select>
-      <input id="scenes" type="text" style="width:70px" title="Scenes" placeholder="scenes" />
+      <select id="profile" style="flex:1" title="Pick a preset"></select>
+      <select id="language" title="Narration language — sets voice & outro automatically"></select>
     </div>
-    <input id="chName" type="text" placeholder="Channel name" style="margin-top:8px" />
-    <input id="niche" type="text" placeholder="Niche / what this channel is about" style="margin-top:8px" />
+    <input id="chName" type="text" placeholder="Channel name — e.g. TheStoryBoardz" style="margin-top:8px" />
+    <input id="niche" type="text" placeholder="Niche — e.g. 'Hindi animated horror stories with a twist'" style="margin-top:8px" />
     <div class="row" style="margin-top:8px">
-      <input id="tone" type="text" placeholder="Tone" style="flex:1" />
-      <input id="artStyle" type="text" placeholder="Art style" style="flex:2" />
+      <span class="mut">Voice auto-set: <b id="voiceLabel">—</b> · <b id="estLen">~0:00</b></span>
+      <button class="ghost" id="advToggle" type="button" style="margin-left:auto;padding:6px 12px">Advanced ▸</button>
     </div>
-    <input id="outro" type="text" placeholder="Outro / subscribe text" style="margin-top:8px" />
+    <div id="advanced" class="hidden" style="margin-top:10px;border-top:1px solid var(--line);padding-top:10px">
+      <div class="row">
+        <select id="voice" title="Override voice"></select>
+        <input id="scenes" type="text" style="width:80px" title="Scenes" placeholder="scenes" />
+      </div>
+      <input id="tone" type="text" placeholder="Tone — e.g. 'suspenseful, eerie'" style="margin-top:8px" />
+      <input id="artStyle" type="text" placeholder="Art style — e.g. '2D animated horror, moonlight, shadows'" style="margin-top:8px" />
+      <input id="outro" type="text" placeholder="Outro / subscribe text" style="margin-top:8px" />
+    </div>
   </div>
 
   <div class="card">
@@ -109,16 +115,29 @@
 
 </main>
 <script>
-let script = null, work = null, profiles = {};
+let script = null, work = null, profiles = {}, langDefaults = {}, voiceMap = {};
 const $ = id => document.getElementById(id);
 const musicMode = () => document.querySelector('input[name=music]:checked').value;
 
+function updateMeta(){
+  const v = $('voice').value;
+  $('voiceLabel').textContent = voiceMap[v] || v || '—';
+  const secs = (parseInt($('scenes').value)||16) * 13 + 7;  // ~13s/scene + intro/outro
+  $('estLen').textContent = '~' + Math.floor(secs/60) + ':' + String(secs%60).padStart(2,'0');
+}
+function applyLang(){               // language drives voice + outro automatically
+  const d = langDefaults[$('language').value]; if(!d) return;
+  $('voice').value = d.voice_speaker;
+  $('outro').value = ($('chName').value || 'Subscribe') + ' — ' + d.subscribe;
+  updateMeta();
+}
 function fillChannel(c){
   $('chName').value = c.name||''; $('niche').value = c.niche||'';
   $('tone').value = c.tone||''; $('artStyle').value = c.art_style||'';
   $('outro').value = c.outro_text||''; $('scenes').value = c.scenes||16;
   if(c.language) $('language').value = c.language;
   if(c.voice_speaker) $('voice').value = c.voice_speaker;
+  updateMeta();
 }
 function buildChannel(){
   return { name:$('chName').value, niche:$('niche').value, tone:$('tone').value,
@@ -128,14 +147,20 @@ function buildChannel(){
 }
 async function initChannels(){
   const d = await (await fetch('/api/channels')).json();
-  profiles = d.profiles||{};
+  profiles = d.profiles||{}; langDefaults = d.lang_defaults||{};
+  d.voices.forEach(v => voiceMap[v.id] = v.label);
   $('language').innerHTML = d.languages.map(l=>`<option value="${l.code}">${l.label}</option>`).join('');
   $('voice').innerHTML = d.voices.map(v=>`<option value="${v.id}">${v.label}</option>`).join('');
   const names = Object.keys(profiles);
-  $('profile').innerHTML = ['<option value="">— default —</option>',
+  $('profile').innerHTML = ['<option value="">— custom —</option>',
     ...names.map(n=>`<option value="${n}">${n}</option>`)].join('');
-  fillChannel(d.default||{});
+  if(names.length){ $('profile').value = names[0]; fillChannel(profiles[names[0]]); }
+  else fillChannel(d.default||{});
   $('profile').onchange = () => fillChannel($('profile').value ? profiles[$('profile').value] : d.default);
+  $('language').onchange = applyLang;
+  $('voice').onchange = updateMeta; $('scenes').oninput = updateMeta;
+  $('advToggle').onclick = () => { const a=$('advanced'); a.classList.toggle('hidden');
+    $('advToggle').textContent = a.classList.contains('hidden') ? 'Advanced ▸' : 'Advanced ▾'; };
 }
 initChannels();
 

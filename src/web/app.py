@@ -60,6 +60,23 @@ LANGUAGES = [
     {"code": "en", "label": "English"},
 ]
 
+# Per-language smart defaults: pick a good Sarvam voice, the proper
+# language_name, and a localized "subscribe" phrase. Selecting a language in
+# the UI auto-applies these so the user barely has to configure anything.
+LANG_DEFAULTS = {
+    "hi": {"language_name": "Hindi (Devanagari)", "voice_speaker": "anushka", "subscribe": "सब्सक्राइब करें 🔔"},
+    "te": {"language_name": "Telugu", "voice_speaker": "vidya", "subscribe": "సబ్‌స్క్రైబ్ చేయండి 🔔"},
+    "ta": {"language_name": "Tamil", "voice_speaker": "vidya", "subscribe": "சந்தா செலுத்துங்கள் 🔔"},
+    "bn": {"language_name": "Bengali", "voice_speaker": "anushka", "subscribe": "সাবস্ক্রাইব করুন 🔔"},
+    "kn": {"language_name": "Kannada", "voice_speaker": "vidya", "subscribe": "ಚಂದಾದಾರರಾಗಿ 🔔"},
+    "ml": {"language_name": "Malayalam", "voice_speaker": "vidya", "subscribe": "സബ്സ്ക്രൈബ് ചെയ്യൂ 🔔"},
+    "mr": {"language_name": "Marathi", "voice_speaker": "karun", "subscribe": "सबस्क्राइब करा 🔔"},
+    "gu": {"language_name": "Gujarati", "voice_speaker": "manisha", "subscribe": "સબ્સ્ક્રાઇબ કરો 🔔"},
+    "pa": {"language_name": "Punjabi", "voice_speaker": "anushka", "subscribe": "ਸਬਸਕ੍ਰਾਈਬ ਕਰੋ 🔔"},
+    "od": {"language_name": "Odia", "voice_speaker": "anushka", "subscribe": "ସବସ୍କ୍ରାଇବ୍ କରନ୍ତୁ 🔔"},
+    "en": {"language_name": "English", "voice_speaker": "hitesh", "subscribe": "Subscribe 🔔"},
+}
+
 
 def _resolve_channel(override: dict | None) -> dict:
     """Merge a UI channel override over the config default channel."""
@@ -106,7 +123,7 @@ def index() -> str:
 def api_channels() -> dict:
     cfg = load_config()
     return {"profiles": cfg.get("profiles", {}), "default": cfg.get("channel", {}),
-            "voices": VOICES, "languages": LANGUAGES}
+            "voices": VOICES, "languages": LANGUAGES, "lang_defaults": LANG_DEFAULTS}
 
 
 @app.post("/api/script")
