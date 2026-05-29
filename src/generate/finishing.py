@@ -80,6 +80,27 @@ def _drone(out: Path, dur: float) -> Path:
     return out
 
 
+def _loop_to_duration(src: Path, out: Path, dur: float) -> Path:
+    """Loop/trim an uploaded music file to exactly `dur` seconds."""
+    _run([
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-stream_loop", "-1", "-i", str(src), "-t", f"{dur}",
+        "-ac", "2", "-ar", "44100", str(out),
+    ])
+    return out
+
+
+def prepare_music(work: Path, total: float, *, mode: str = "generate",
+                  path: Path | None = None) -> Path | None:
+    """Return a music-bed wav for the whole video, per `mode`:
+    'generate' (ambient drone), 'upload' (loop/trim `path`), 'none' (no bed)."""
+    if mode == "none":
+        return None
+    if mode == "upload" and path and Path(path).exists():
+        return _loop_to_duration(Path(path), work / "music.wav", total)
+    return _drone(work / "music.wav", total)
+
+
 def _concat(clips: list[Path], out: Path) -> Path:
     inputs: list[str] = []
     for c in clips:
@@ -96,12 +117,14 @@ def _concat(clips: list[Path], out: Path) -> Path:
     return out
 
 
-def _mix_drone(video: Path, drone: Path, out: Path) -> Path:
+def _mix_music(video: Path, music: Path, out: Path, intensity: float = 0.32) -> Path:
+    """Mix a music bed under the narration at `intensity` (0..1)."""
+    vol = max(0.0, min(float(intensity), 1.0))
     _run([
         "ffmpeg", "-y", "-loglevel", "error",
-        "-i", str(video), "-i", str(drone),
+        "-i", str(video), "-i", str(music),
         "-filter_complex",
-        "[1:a]volume=0.32[d];[0:a][d]amix=inputs=2:duration=first:dropout_transition=0[a]",
+        f"[1:a]volume={vol}[d];[0:a][d]amix=inputs=2:duration=first:dropout_transition=0[a]",
         "-map", "0:v", "-map", "[a]",
         "-c:v", "copy", "-c:a", "aac", "-b:a", "160k", str(out),
     ])
@@ -215,10 +238,12 @@ def player_safe(src: Path, out: Path) -> Path:
 
 
 def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path],
-                            work: Path, *, intro_title: str, outro_text: str
-                            ) -> tuple[Path, str]:
-    """Produce the captionless finished video (intro+body+outro+drone) and the
-    ASS text to burn on it. Returns (video_path, ass_text)."""
+                            work: Path, *, intro_title: str, outro_text: str,
+                            music_mode: str = "generate", music_path: Path | None = None,
+                            music_intensity: float = 0.32) -> tuple[Path, str]:
+    """Produce the captionless finished video (intro+body+outro+music) and the
+    ASS text to burn on it. `music_mode`: generate|upload|none. Returns
+    (video_path, ass_text)."""
     work.mkdir(parents=True, exist_ok=True)
     body = assemble(images, audios, work / "body.mp4", work / "body_work", W, H)
     # Cinematic title/end cards from dedicated Flux backgrounds (slow zoom).
@@ -230,8 +255,11 @@ def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path]
 
     body_dur = sum(max(wav_duration(a), 1.0) for a in audios)
     total = INTRO_S + body_dur + OUTRO_S
-    drone = _drone(work / "drone.wav", total)
-    finished = _mix_drone(joined, drone, work / "finished_nocaps.mp4")
+    music = prepare_music(work, total, mode=music_mode, path=music_path)
+    if music is not None:
+        finished = _mix_music(joined, music, work / "finished_nocaps.mp4", music_intensity)
+    else:
+        finished = joined
 
     ass = build_ass(scenes, audios, intro_s=INTRO_S, outro_s=OUTRO_S,
                     intro_title=intro_title, outro_text=outro_text)

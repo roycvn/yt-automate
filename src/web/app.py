@@ -1,0 +1,254 @@
+"""FastAPI UI for the yta video engine.
+
+Flow (matches the 7-step UI):
+  1. /api/script        generate from a topic OR accept a pasted script
+  2. /api/generate      images+voice+assemble+(bg music)+captions+logos -> video
+                        (bg music: none | generate | upload; + intensity)
+  3. /api/thumbnail     create/regenerate the thumbnail
+  4. /api/video|thumb   preview the final video / thumbnail
+  5. /api/download      download the final mp4
+  6. /api/youtube/...   status + auto-upload
+
+Long steps run as background jobs; the UI polls /api/job/{id}.
+Run:  uvicorn src.web.app:app --reload  (or python -m src.web.app)
+"""
+from __future__ import annotations
+
+import asyncio
+import json
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
+
+from ..config import load_config
+from ..generate.script import generate_script, StoryScript, Scene, ThumbnailConcept
+from ..generate.images import generate_scene_images
+from ..generate.voice import synthesize_scenes
+from ..generate.finishing import build_finished_skeleton, overlay_logos, player_safe
+from ..generate.thumbnail import make_thumbnail
+from ..generate import seo
+from ..clients.klipr import KliprClient
+from ..clients.storage import upload_and_sign
+from ..produce import youtube_for
+
+ROOT = Path(__file__).resolve().parent.parent.parent
+WORK_ROOT = ROOT / "artifacts" / "web"
+STATIC = Path(__file__).resolve().parent / "static"
+
+app = FastAPI(title="yta studio")
+_pool = ThreadPoolExecutor(max_workers=2)
+_jobs: dict[str, dict] = {}
+
+
+# ----------------------------------------------------------------- helpers
+def _script_from_dict(d: dict) -> StoryScript:
+    th = d.get("thumbnail") or {}
+    return StoryScript(
+        title=d.get("title", ""), title_translit=d.get("title_translit", ""),
+        description=d.get("description", ""), tags=d.get("tags", []),
+        thumbnail=ThumbnailConcept(th.get("subject", ""), th.get("hook", ""), th.get("mood", "")),
+        scenes=[Scene(s["id"], s.get("narration") or s.get("narration_hi", ""),
+                      s["image_prompt"]) for s in d.get("scenes", [])])
+
+
+def _run_job(fn) -> str:
+    jid = uuid.uuid4().hex[:12]
+    _jobs[jid] = {"status": "running", "step": "starting", "result": None, "error": None}
+
+    def wrap():
+        try:
+            _jobs[jid]["result"] = fn(lambda s: _jobs[jid].update(step=s))
+            _jobs[jid]["status"] = "done"
+        except Exception as e:  # noqa: BLE001
+            _jobs[jid]["status"] = "error"
+            _jobs[jid]["error"] = str(e)[:500]
+
+    _pool.submit(wrap)
+    return jid
+
+
+# ----------------------------------------------------------------- routes
+@app.get("/", response_class=HTMLResponse)
+def index() -> str:
+    return (STATIC / "index.html").read_text()
+
+
+@app.post("/api/script")
+def api_script(payload: dict) -> dict:
+    """Accept a pasted script (JSON) or generate one from a topic/brief."""
+    pasted = (payload.get("script") or "").strip()
+    if pasted:
+        try:
+            data = json.loads(pasted)
+        except json.JSONDecodeError:
+            raise HTTPException(400, "Pasted script must be valid JSON (title, scenes[], ...).")
+        return _script_from_dict(data).to_dict()
+    cfg = load_config()
+    s = generate_script(channel=cfg.get("channel", {}), theme=payload.get("topic") or None)
+    return s.to_dict()
+
+
+@app.post("/api/generate")
+async def api_generate(script: str = Form(...), music_mode: str = Form("generate"),
+                       music_intensity: float = Form(0.32),
+                       music_file: UploadFile | None = File(None)) -> dict:
+    cfg = load_config()
+    channel = cfg.get("channel", {})
+    story = _script_from_dict(json.loads(script))
+    work = WORK_ROOT / f"job-{int(time.time())}-{uuid.uuid4().hex[:6]}"
+    work.mkdir(parents=True, exist_ok=True)
+    (work / "script.json").write_text(json.dumps(story.to_dict(), ensure_ascii=False, indent=2))
+
+    music_path = None
+    if music_mode == "upload" and music_file is not None:
+        music_path = work / f"music_upload{Path(music_file.filename or 'bg').suffix or '.mp3'}"
+        music_path.write_bytes(await music_file.read())
+
+    def job(step):
+        step("generating images")
+        images = generate_scene_images(story.scenes, work / "images")
+        step("synthesizing narration")
+        audios = synthesize_scenes(story.scenes, work / "audio",
+                                   language=channel.get("language", "hi"),
+                                   speaker=channel.get("voice_speaker", "anushka"))
+        step("assembling + background music")
+        finished, ass = build_finished_skeleton(
+            story.scenes, images, audios, work / "finish",
+            intro_title=story.title,
+            outro_text=channel.get("outro_text", f"{channel.get('name','Subscribe')} 🔔"),
+            music_mode=music_mode, music_path=music_path, music_intensity=music_intensity)
+        step("burning captions (klipr)")
+        klipr = KliprClient_from_env()
+        url = upload_and_sign(finished, f"web/{work.name}.mp4")
+        res = asyncio.run(klipr.caption_burn(url, ass, watermark=False))
+        import httpx
+        raw = work / "captioned.mp4"
+        with httpx.stream("GET", res.download_url, timeout=600) as r:
+            r.raise_for_status(); raw.write_bytes(r.read())
+        step("brand overlays + final encode")
+        items = [{**it, "path": str(ROOT / it["path"])}
+                 for it in cfg.get("branding", {}).get("logos", [])]
+        branded = overlay_logos(raw, work / "branded.mp4", items)
+        player_safe(branded, work / "final.mp4")
+        return {"work": work.name, "video_url": f"/api/video/{work.name}"}
+
+    return {"job_id": _run_job(job)}
+
+
+@app.post("/api/thumbnail")
+def api_thumbnail(payload: dict) -> dict:
+    cfg = load_config()
+    tcfg = cfg.get("thumbnail", {})
+    work = WORK_ROOT / payload["work"]
+    story = _script_from_dict(json.loads((work / "script.json").read_text()))
+    th = story.thumbnail
+
+    def job(step):
+        step("rendering thumbnail")
+        klipr = KliprClient_from_env()
+        out = make_thumbnail(
+            th.hook or story.title, work / f"thumb-{int(time.time())}",
+            klipr=klipr, upload_and_sign=upload_and_sign,
+            subject=th.subject or tcfg.get("subject", "dramatic subject, strong emotion"),
+            banner=tcfg.get("banner_text", ""),
+            mood=th.mood or tcfg.get("mood", "dramatic cinematic lighting, bold colors"),
+            title_color=tcfg.get("title_color", "&H00FFFFFF"),
+            accent_color=tcfg.get("accent_color", "&H000000FF"))
+        # copy to a stable path the UI can fetch (cache-bust with ts query)
+        dest = work / "thumbnail.png"
+        dest.write_bytes(out.read_bytes())
+        return {"thumb_url": f"/api/thumb/{work.name}?t={int(time.time())}"}
+
+    return {"job_id": _run_job(job)}
+
+
+@app.post("/api/upload")
+def api_upload(payload: dict) -> dict:
+    cfg = load_config()
+    channel = cfg.get("channel", {})
+    language = channel.get("language", "hi")
+    privacy = cfg.get("publish", {}).get("initial_privacy", "private")
+    work = WORK_ROOT / payload["work"]
+    story = _script_from_dict(json.loads((work / "script.json").read_text()))
+
+    def job(step):
+        yt = youtube_for(language)
+        if yt is None:
+            raise RuntimeError("YouTube not connected (set creds in .env).")
+        desc = seo.build_description(story.title, story.title_translit,
+                                     story.description, story.tags, channel)
+        tags = seo.build_tags(story.tags, channel.get("seo_tags"))
+        title = f"{story.title}{channel.get('title_suffix','')}"
+        step("uploading to youtube")
+        vid = yt.upload_from_file(work / "final.mp4", title, desc, tags=tags,
+                                  privacy=privacy, language=language)
+        thumb = work / "thumbnail.png"
+        if thumb.exists():
+            step("setting thumbnail")
+            try:
+                yt.set_thumbnail(vid, thumb)
+            except Exception:  # noqa: BLE001
+                pass
+        return {"youtube_url": f"https://youtu.be/{vid}", "privacy": privacy}
+
+    return {"job_id": _run_job(job)}
+
+
+@app.get("/api/job/{jid}")
+def api_job(jid: str) -> dict:
+    j = _jobs.get(jid)
+    if not j:
+        raise HTTPException(404, "unknown job")
+    return j
+
+
+@app.get("/api/youtube/status")
+def api_youtube_status() -> dict:
+    load_config()
+    yt = youtube_for(load_config().get("channel", {}).get("language", "hi"))
+    return {"connected": yt is not None}
+
+
+@app.get("/api/video/{work}")
+def api_video(work: str) -> FileResponse:
+    p = WORK_ROOT / work / "final.mp4"
+    if not p.exists():
+        raise HTTPException(404, "not ready")
+    return FileResponse(p, media_type="video/mp4")
+
+
+@app.get("/api/thumb/{work}")
+def api_thumb(work: str) -> FileResponse:
+    p = WORK_ROOT / work / "thumbnail.png"
+    if not p.exists():
+        raise HTTPException(404, "not ready")
+    return FileResponse(p, media_type="image/png")
+
+
+@app.get("/api/download/{work}")
+def api_download(work: str) -> FileResponse:
+    p = WORK_ROOT / work / "final.mp4"
+    if not p.exists():
+        raise HTTPException(404, "not ready")
+    return FileResponse(p, media_type="video/mp4", filename=f"{work}.mp4")
+
+
+def KliprClient_from_env() -> KliprClient:
+    import os
+    return KliprClient(os.environ["KLIPR_API_KEY"],
+                       base_url=load_config().get("klipr", {}).get("base_url",
+                                                                   "https://klipr.in/api/batch"))
+
+
+if STATIC.exists():
+    app.mount("/static", StaticFiles(directory=str(STATIC)), name="static")
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run("src.web.app:app", host="127.0.0.1", port=8000, reload=False)

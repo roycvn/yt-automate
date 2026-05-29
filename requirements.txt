@@ -8,3 +8,6 @@ google-auth>=2.0
 google-auth-oauthlib>=1.0
 elevenlabs>=1.0
 Pillow>=10.0
+fastapi>=0.110
+uvicorn>=0.29
+python-multipart>=0.0.9

@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>yta studio</title>
+<style>
+  :root { --bg:#0b0b12; --card:#15151f; --line:#262633; --txt:#e8e8f0; --mut:#9a9ab0;
+          --acc:#e23744; --ok:#36c08a; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--txt);
+         font:15px/1.5 -apple-system,Segoe UI,Roboto,sans-serif; }
+  header { padding:18px 24px; border-bottom:1px solid var(--line); font-weight:700; font-size:18px; }
+  header span { color:var(--acc); }
+  main { max-width:880px; margin:0 auto; padding:24px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px;
+          padding:18px 20px; margin:0 0 18px; }
+  .card h2 { margin:0 0 12px; font-size:15px; color:var(--mut); text-transform:uppercase;
+             letter-spacing:.06em; }
+  textarea, input[type=text] { width:100%; background:#0e0e16; color:var(--txt);
+     border:1px solid var(--line); border-radius:9px; padding:10px 12px; font:inherit; }
+  textarea { min-height:80px; resize:vertical; }
+  button { background:var(--acc); color:#fff; border:0; border-radius:9px; padding:10px 16px;
+     font:inherit; font-weight:600; cursor:pointer; }
+  button.ghost { background:#23232f; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .mut { color:var(--mut); }
+  .pill { font-size:12px; padding:3px 9px; border-radius:999px; background:#23232f; }
+  .step { color:var(--mut); font-size:13px; margin-top:8px; min-height:18px; }
+  video, img.thumb { width:100%; border-radius:10px; border:1px solid var(--line); margin-top:10px; }
+  label.r { margin-right:14px; }
+  .ok { color:var(--ok); } .err { color:var(--acc); }
+  .hidden { display:none; }
+  a.dl { color:var(--txt); }
+</style>
+</head>
+<body>
+<header>yta <span>studio</span> — generate &amp; publish</header>
+<main>
+
+  <div class="card">
+    <h2>1 · Script</h2>
+    <div class="row">
+      <input id="topic" type="text" placeholder="Topic / brief (e.g. 'a haunted lift') — leave blank for a fresh idea" />
+      <button id="genScript">Generate Script</button>
+    </div>
+    <p class="mut" style="margin:10px 0 4px">…or paste your own script JSON:</p>
+    <textarea id="paste" placeholder='{"title":"...","scenes":[{"id":1,"narration":"...","image_prompt":"..."}], "thumbnail":{"subject":"...","hook":"...","mood":"..."}}'></textarea>
+    <div class="row" style="margin-top:8px"><button class="ghost" id="usePaste">Use Pasted</button>
+      <span id="scriptInfo" class="pill">no script yet</span></div>
+    <textarea id="scriptView" class="hidden" style="margin-top:10px;min-height:160px"></textarea>
+  </div>
+
+  <div class="card">
+    <h2>2 · Background music</h2>
+    <div class="row">
+      <label class="r"><input type="radio" name="music" value="generate" checked> Generate (ambient)</label>
+      <label class="r"><input type="radio" name="music" value="upload"> Upload</label>
+      <label class="r"><input type="radio" name="music" value="none"> None</label>
+    </div>
+    <div class="row" style="margin-top:8px"><input id="musicFile" type="file" accept="audio/*" class="hidden"></div>
+    <div style="margin-top:10px">
+      <span class="mut">3 · Intensity: <b id="intVal">0.32</b></span>
+      <input id="intensity" type="range" min="0" max="1" step="0.02" value="0.32" style="width:100%">
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>4 · Generate audio + video</h2>
+    <button id="genVideo" disabled>Generate Video</button>
+    <div id="videoStep" class="step"></div>
+    <video id="player" class="hidden" controls></video>
+  </div>
+
+  <div class="card">
+    <h2>5 · Thumbnail</h2>
+    <button id="genThumb" class="ghost" disabled>Create / Regenerate Thumbnail</button>
+    <div id="thumbStep" class="step"></div>
+    <img id="thumbImg" class="thumb hidden" />
+  </div>
+
+  <div class="card">
+    <h2>6 · Final video &amp; 7 · Publish</h2>
+    <div class="row">
+      <a id="download" class="dl hidden" download><button class="ghost">⬇ Download MP4</button></a>
+      <button id="upload" disabled>Upload to YouTube</button>
+      <span id="ytStatus" class="pill">checking YouTube…</span>
+    </div>
+    <div id="uploadStep" class="step"></div>
+  </div>
+
+</main>
+<script>
+let script = null, work = null;
+const $ = id => document.getElementById(id);
+const musicMode = () => document.querySelector('input[name=music]:checked').value;
+
+$('intensity').oninput = e => $('intVal').textContent = e.target.value;
+document.querySelectorAll('input[name=music]').forEach(r => r.onchange = () =>
+  $('musicFile').classList.toggle('hidden', musicMode() !== 'upload'));
+
+function setScript(s){ script = s; $('scriptView').classList.remove('hidden');
+  $('scriptView').value = JSON.stringify(s, null, 2);
+  $('scriptInfo').textContent = (s.title||'untitled') + ' · ' + (s.scenes?.length||0) + ' scenes';
+  $('genVideo').disabled = false; }
+
+async function poll(jid, onStep){
+  while(true){
+    const j = await (await fetch('/api/job/'+jid)).json();
+    onStep(j.step||'');
+    if(j.status==='done') return j.result;
+    if(j.status==='error') throw new Error(j.error||'failed');
+    await new Promise(r=>setTimeout(r,1500));
+  }
+}
+
+$('genScript').onclick = async () => {
+  $('genScript').disabled = true; $('scriptInfo').textContent='generating…';
+  try { setScript(await (await fetch('/api/script',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({topic:$('topic').value})})).json()); }
+  catch(e){ $('scriptInfo').textContent='error'; alert(e); }
+  $('genScript').disabled = false;
+};
+$('usePaste').onclick = async () => {
+  try { setScript(await (await fetch('/api/script',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({script:$('paste').value})})).json()); }
+  catch(e){ alert('Invalid script JSON'); }
+};
+
+$('genVideo').onclick = async () => {
+  try { script = JSON.parse($('scriptView').value); } catch(e){ return alert('Script JSON invalid'); }
+  $('genVideo').disabled = true; $('player').classList.add('hidden');
+  const fd = new FormData();
+  fd.append('script', JSON.stringify(script));
+  fd.append('music_mode', musicMode());
+  fd.append('music_intensity', $('intensity').value);
+  if(musicMode()==='upload' && $('musicFile').files[0]) fd.append('music_file', $('musicFile').files[0]);
+  try {
+    const {job_id} = await (await fetch('/api/generate',{method:'POST',body:fd})).json();
+    const res = await poll(job_id, s => $('videoStep').textContent = '⏳ ' + s);
+    work = res.work;
+    $('videoStep').innerHTML = '<span class=ok>✓ video ready</span>';
+    $('player').src = res.video_url + '?t=' + Date.now(); $('player').classList.remove('hidden');
+    $('genThumb').disabled = false; $('upload').disabled = false;
+    $('download').href = '/api/download/'+work; $('download').classList.remove('hidden');
+  } catch(e){ $('videoStep').innerHTML = '<span class=err>✗ '+e.message+'</span>'; }
+  $('genVideo').disabled = false;
+};
+
+$('genThumb').onclick = async () => {
+  $('genThumb').disabled = true;
+  try {
+    const {job_id} = await (await fetch('/api/thumbnail',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({work})})).json();
+    const res = await poll(job_id, s => $('thumbStep').textContent = '⏳ ' + s);
+    $('thumbStep').innerHTML = '<span class=ok>✓ thumbnail ready</span>';
+    $('thumbImg').src = res.thumb_url; $('thumbImg').classList.remove('hidden');
+  } catch(e){ $('thumbStep').innerHTML = '<span class=err>✗ '+e.message+'</span>'; }
+  $('genThumb').disabled = false;
+};
+
+$('upload').onclick = async () => {
+  $('upload').disabled = true;
+  try {
+    const {job_id} = await (await fetch('/api/upload',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({work})})).json();
+    const res = await poll(job_id, s => $('uploadStep').textContent = '⏳ ' + s);
+    $('uploadStep').innerHTML = '<span class=ok>✓ uploaded ('+res.privacy+'): </span>'+
+      '<a class=dl href="'+res.youtube_url+'" target=_blank>'+res.youtube_url+'</a>';
+  } catch(e){ $('uploadStep').innerHTML = '<span class=err>✗ '+e.message+'</span>'; }
+  $('upload').disabled = false;
+};
+
+fetch('/api/youtube/status').then(r=>r.json()).then(d=>{
+  $('ytStatus').textContent = d.connected ? '✓ YouTube connected' : '⚠ YouTube not connected (.env)';
+  $('ytStatus').className = 'pill ' + (d.connected?'ok':'');
+});
+</script>
+</body>
+</html>
