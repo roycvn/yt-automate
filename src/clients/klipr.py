@@ -61,6 +61,35 @@ class KliprClient:
         key = "source_url" if source_type == "youtube" else "source_external_url"
         return {"source_type": source_type, key: source_url}
 
+    # ------------------------------------------------------------------ image / tts / upload
+    async def generate_image(self, prompt: str, aspect_ratio: str = "16:9",
+                             output_format: str = "png") -> bytes:
+        async with httpx.AsyncClient(timeout=180) as http:
+            r = await http.post(f"{self.base_url}/image", headers=self._headers, json={
+                "prompt": prompt, "aspect_ratio": aspect_ratio,
+                "output_format": output_format})
+        self._raise_for(r)
+        import base64
+        return base64.b64decode(r.json()["bytes_base64"])
+
+    async def tts(self, text: str, language: str = "hi",
+                  speaker: str = "anushka") -> bytes:
+        async with httpx.AsyncClient(timeout=180) as http:
+            r = await http.post(f"{self.base_url}/tts", headers=self._headers, json={
+                "text": text, "language": language, "speaker": speaker})
+        self._raise_for(r)
+        import base64
+        return base64.b64decode(r.json()["bytes_base64"])
+
+    async def upload_file(self, path: Path) -> str:
+        """Upload a local file to klipr; returns a 1h signed URL."""
+        async with httpx.AsyncClient(timeout=180) as http:
+            with open(path, "rb") as fh:
+                r = await http.post(f"{self.base_url}/upload", headers=self._headers,
+                                    files={"file": (Path(path).name, fh, "application/octet-stream")})
+        self._raise_for(r)
+        return r.json()["signed_url"]
+
     # ------------------------------------------------------------------ script
     async def generate_script(self, channel: dict, topic: str | None = None,
                               model: str | None = None) -> dict:
