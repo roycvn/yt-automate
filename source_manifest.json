@@ -1,0 +1,12 @@
+{
+  "$comment": "Ownership gate. Every source video must be listed with owner_confirmed=true and proof before it can enter the pipeline. Files not listed (or with owner_confirmed=false) are quarantined.",
+  "videos": [
+    {
+      "id": "example-001",
+      "path": "/absolute/path/to/your/original.mp4",
+      "owner_confirmed": false,
+      "proof": "link or note to original project file / proof of creation",
+      "license": "owned"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+.env
+*.db
+artifacts/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+assets/watermark/*.png
+*.mp4
+*.srt

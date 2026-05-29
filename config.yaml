@@ -1,0 +1,43 @@
+channels:
+  hindi:
+    youtube_channel_id: "UC_REPLACE_HINDI"
+    watermark: assets/watermark/hindi.png
+    language: hi
+  telugu:
+    youtube_channel_id: "UC_REPLACE_TELUGU"
+    watermark: assets/watermark/telugu.png
+    language: te
+
+languages: [hi, te]
+
+watermark:
+  position: top-right      # top-left | top-right | bottom-left | bottom-right
+  opacity: 0.6
+  scale: 0.12              # fraction of video width
+
+clip:
+  count: 8
+  max_duration_s: 60
+  aspect: "9:16"
+  burn_in_captions: true
+
+dubbing:
+  provider: elevenlabs     # elevenlabs | google
+  preserve_timing: true
+
+seo:
+  model: claude-opus-4-7
+  title_template: "{hook} _ {translit} _ Horror Stories _ Hindi Kahaniya _ Moral Stories"
+
+publish:
+  uploads_per_day_per_channel: 6
+  cadence_hours: 8
+  initial_privacy: private   # uploaded private with publishAt for scheduling
+
+klipr:
+  base_url: "https://api.klipr.in/v1"
+  use_real_api: false        # flip to true when api.klipr.in is live
+
+storage:
+  artifacts_dir: ./artifacts
+  db_path: ./yta.db
