@@ -61,6 +61,21 @@ class KliprClient:
         key = "source_url" if source_type == "youtube" else "source_external_url"
         return {"source_type": source_type, key: source_url}
 
+    # ------------------------------------------------------------------ script
+    async def generate_script(self, channel: dict, topic: str | None = None,
+                              model: str | None = None) -> dict:
+        """Call klipr's /api/batch/script — centralised Claude usage, so yta
+        doesn't need its own ANTHROPIC_API_KEY."""
+        payload: dict = {"channel": channel}
+        if topic:
+            payload["topic"] = topic
+        if model:
+            payload["model"] = model
+        async with httpx.AsyncClient(timeout=120) as http:
+            r = await http.post(f"{self.base_url}/script", json=payload, headers=self._headers)
+        self._raise_for(r)
+        return r.json()
+
     # ------------------------------------------------------------------ dub
     async def start_dub(self, source_url: str, target_language: str,
                         source_type: SourceType = "youtube",

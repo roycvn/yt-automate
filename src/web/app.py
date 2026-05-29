@@ -26,7 +26,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from ..config import load_config
-from ..generate.script import generate_script, StoryScript, Scene, ThumbnailConcept
+from ..generate.script import StoryScript, Scene, ThumbnailConcept
 from ..generate.images import generate_scene_images
 from ..generate.voice import synthesize_scenes
 from ..generate.finishing import build_finished_skeleton, overlay_logos, player_safe, make_short
@@ -77,6 +77,13 @@ LANG_DEFAULTS = {
     "od": {"language_name": "Odia", "voice_speaker": "anushka", "subscribe": "ସବସ୍କ୍ରାଇବ୍ କରନ୍ତୁ 🔔"},
     "en": {"language_name": "English", "voice_speaker": "hitesh", "subscribe": "Subscribe 🔔"},
 }
+
+
+def generate_script(channel: dict, theme: str | None = None) -> StoryScript:
+    """Thin wrapper around klipr's /api/batch/script — kept in this module so
+    tests can monkeypatch it, and so the rest of yta doesn't import Anthropic."""
+    data = asyncio.run(KliprClient_from_env().generate_script(channel, theme))
+    return _script_from_dict(data)
 
 
 def _resolve_channel(override: dict | None) -> dict:
@@ -139,11 +146,10 @@ def api_script(payload: dict) -> dict:
         return _script_from_dict(data).to_dict()
     channel = _resolve_channel(payload.get("channel"))
     try:
-        s = generate_script(channel=channel, theme=payload.get("topic") or None)
+        return generate_script(channel, payload.get("topic") or None).to_dict()
     except Exception as e:  # noqa: BLE001
         return JSONResponse({"error": f"script generation failed: {str(e)[:300]}"},
                             status_code=502)
-    return s.to_dict()
 
 
 @app.post("/api/generate")
