@@ -18,6 +18,7 @@ from pathlib import Path
 
 from .generate.script import generate_script, StoryScript, Scene, ThumbnailConcept
 from .generate.images import generate_scene_images
+from .generate.videos import generate_scene_videos
 from .generate.voice import synthesize_scenes
 from .generate.finishing import build_finished_skeleton, player_safe, overlay_logos
 from .config import load_config
@@ -71,14 +72,31 @@ def produce(reuse_script: Path | None = None,
     script = load_or_generate_script(work, reuse_script, channel)
     print(f"script: {script.title} ({len(script.scenes)} scenes)")
 
-    images = generate_scene_images(script.scenes, work / "images")
+    # Generation mode: "image" (Flux still + ken-burns zoom, default) or
+    # "video" (fal.ai AI motion clips per scene, in the configured style).
+    gen = cfg.get("generation", {})
+    mode = gen.get("mode", "image")
+    style = gen.get("style", "2d")
+    clip_seconds = int(gen.get("clip_seconds", 5))
+
+    images: list[Path] = []
+    scene_videos: list[Path] | None = None
+    if mode == "video":
+        scene_videos = generate_scene_videos(
+            script.scenes, work / "videos", style=style,
+            aspect_ratio="16:9", duration_seconds=clip_seconds)
+        print(f"scene videos done ({style})")
+    else:
+        images = generate_scene_images(script.scenes, work / "images")
+        print("images done")
     audios = synthesize_scenes(script.scenes, work / "audio",
                                language=language, speaker=speaker)
-    print("images + voice done")
+    print("voice done")
 
     finished, ass, meta = build_finished_skeleton(
         script.scenes, images, audios, work / "finish",
-        intro_title=script.title, outro_text=outro)
+        intro_title=script.title, outro_text=outro, language=language,
+        scene_videos=scene_videos)
     url = upload_and_sign(finished, f"produce/{work.name}.mp4")
     res = asyncio.run(klipr.caption_burn(url, ass, watermark=False))
     import httpx
@@ -112,7 +130,8 @@ def produce(reuse_script: Path | None = None,
         banner=tcfg.get("banner_text", ""),
         mood=th.mood or tcfg.get("mood", "dramatic cinematic lighting, bold colors"),
         title_color=tcfg.get("title_color", "&H00FFFFFF"),
-        accent_color=tcfg.get("accent_color", "&H000000FF"))
+        accent_color=tcfg.get("accent_color", "&H000000FF"),
+        language=language)
     print("thumbnail:", thumb)
 
     description = seo.build_description(script.title, script.title_translit,

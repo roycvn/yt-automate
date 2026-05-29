@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.generate import seo
-from src.generate.captions import _split_sentences, _ts, build_ass, ASS_HEADER
+from src.generate.captions import _split_sentences, _ts, build_ass
 from src.generate.script import StoryScript, Scene, ThumbnailConcept
 from src.clients.klipr import KliprClient, JobResult
 
@@ -38,7 +38,11 @@ def test_build_ass_skips_title_when_no_intro(tmp_path, monkeypatch):
     assert "मेरी कहानी" in with_title
     assert "Title,," in with_title           # a Title dialogue event exists
     assert "मेरी कहानी" not in no_title       # skipped when no intro/title
-    assert ASS_HEADER.split("\n")[0] in with_title
+    assert "[Script Info]" in with_title  # ASS header present
+    # language picks the right Noto family (Telugu input -> Noto Sans Telugu).
+    te = build_ass(scenes, audios, intro_s=3, outro_s=4,
+                   intro_title="తెలుగు", outro_text="Subscribe", language="te")
+    assert "Noto Sans Telugu" in te
 
 
 # ----------------------------- seo

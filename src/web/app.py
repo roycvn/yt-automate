@@ -223,7 +223,8 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
             intro_title=story.title,
             outro_text=channel.get("outro_text", f"{channel.get('name','Subscribe')} 🔔"),
             music_mode=music_mode, music_path=music_path, music_intensity=music_intensity,
-            intro_mode=intro_mode, intro_path=intro_path)
+            intro_mode=intro_mode, intro_path=intro_path,
+            language=channel.get("language", "hi"))
         step("burning captions (klipr)")
         klipr = KliprClient_from_env()
         url = upload_and_sign(finished, f"web/{work.name}.mp4")
@@ -268,6 +269,8 @@ def api_thumbnail(payload: dict) -> dict:
     work = WORK_ROOT / payload["work"]
     story = _script_from_dict(json.loads((work / "script.json").read_text()))
     th = story.thumbnail
+    channel = (payload.get("channel") or {})
+    language = channel.get("language") or cfg.get("channel", {}).get("language", "hi")
 
     def job(step):
         step("rendering thumbnail")
@@ -279,7 +282,8 @@ def api_thumbnail(payload: dict) -> dict:
             banner=tcfg.get("banner_text", ""),
             mood=th.mood or tcfg.get("mood", "dramatic cinematic lighting, bold colors"),
             title_color=tcfg.get("title_color", "&H00FFFFFF"),
-            accent_color=tcfg.get("accent_color", "&H000000FF"))
+            accent_color=tcfg.get("accent_color", "&H000000FF"),
+            language=language)
         # copy to a stable path the UI can fetch (cache-bust with ts query)
         dest = work / "thumbnail.png"
         dest.write_bytes(out.read_bytes())

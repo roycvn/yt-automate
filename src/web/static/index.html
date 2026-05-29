@@ -69,13 +69,22 @@
 
   <div class="card">
     <h2><span class="badge">0</span> Channel</h2>
-    <label class="hint" style="display:block;margin-bottom:5px">Language (sets voice, outro & a matching preset)</label>
+    <label class="hint" for="language" style="display:block;margin-bottom:5px">Language — picks a matching voice, outro, and preset</label>
     <select id="language" title="Language — drives the whole profile"></select>
+
     <div class="grid2 sp">
-      <select id="profile" title="Pick a preset"></select>
-      <input id="chName" type="text" placeholder="Channel name — e.g. TheStoryBoardz" />
+      <div>
+        <label class="hint" for="profile" style="display:block;margin-bottom:5px">Preset (optional)</label>
+        <select id="profile" title="Start from a preset, or — custom — to fill it yourself"></select>
+      </div>
+      <div>
+        <label class="hint" for="chName" style="display:block;margin-bottom:5px">Channel name</label>
+        <input id="chName" type="text" placeholder="e.g. TheStoryBoardz" />
+      </div>
     </div>
-    <input id="niche" class="sp" type="text" placeholder="Niche — e.g. 'animated horror stories with a twist ending'" />
+
+    <label class="hint sp" for="niche" style="display:block;margin-bottom:5px">Niche — any topic (horror, cooking, motivation, tech, kids, finance…)</label>
+    <input id="niche" type="text" placeholder="e.g. 'animated horror stories' • 'quick recipes' • '60-second motivation' • 'AI news explainers'" />
 
     <p class="hint sp">Bottom-right logo (your channel logo). “Made with Klipr” always stays top-right.</p>
     <div class="seg" id="logoSeg">
@@ -98,22 +107,34 @@
     </div>
     <div id="advanced" class="hidden sp">
       <div class="grid2">
-        <select id="voice" title="Override voice"></select>
-        <input id="scenes" type="text" placeholder="scenes (e.g. 16)" />
+        <div>
+          <label class="hint" for="voice" style="display:block;margin-bottom:5px">Voice override</label>
+          <select id="voice" title="Override voice"></select>
+        </div>
+        <div>
+          <label class="hint" for="scenes" style="display:block;margin-bottom:5px">Scene count</label>
+          <input id="scenes" type="text" placeholder="e.g. 16" />
+        </div>
       </div>
-      <input id="tone" class="sp" type="text" placeholder="Tone — e.g. 'suspenseful, eerie, chilling'" />
-      <input id="artStyle" class="sp" type="text" placeholder="Art style — e.g. '2D animated horror, moonlight, heavy shadows'" />
-      <input id="outro" class="sp" type="text" placeholder="Outro / subscribe text" />
+      <label class="hint sp" for="tone" style="display:block;margin-bottom:5px">Tone</label>
+      <input id="tone" type="text" placeholder="e.g. 'suspenseful, eerie' • 'warm, friendly' • 'bold, motivating'" />
+      <label class="hint sp" for="artStyle" style="display:block;margin-bottom:5px">Art style</label>
+      <input id="artStyle" type="text" placeholder="e.g. '2D animated horror' • 'flat illustrated foodie' • 'modern tech infographic'" />
+      <label class="hint sp" for="outro" style="display:block;margin-bottom:5px">Outro / subscribe line</label>
+      <input id="outro" type="text" placeholder="e.g. 'Subscribe for daily 🔔'" />
     </div>
   </div>
 
   <div class="card">
     <h2><span class="badge">1</span> Script</h2>
+    <label class="hint" for="topic" style="display:block;margin-bottom:5px">
+      Tell us what the video is about — or leave blank to auto-generate a fresh idea inside your niche.
+    </label>
     <div class="row">
-      <input id="topic" type="text" placeholder="Topic / brief — e.g. 'a haunted wall clock' (blank = fresh idea)" style="flex:1" />
+      <input id="topic" type="text" placeholder="e.g. 'a haunted wall clock' • 'paneer butter masala in 60s' • 'why Bitcoin halving matters'" style="flex:1" />
       <button id="genScript">✨ Generate</button>
     </div>
-    <p class="hint">…or paste your own script JSON below and click Use Pasted.</p>
+    <p class="hint">…or paste your own script JSON below and click Use Pasted — full control over title / scenes / thumbnail.</p>
     <textarea id="paste" placeholder='{"title":"...","scenes":[{"id":1,"narration":"...","image_prompt":"..."}],"thumbnail":{"subject":"...","hook":"...","mood":"..."}}'></textarea>
     <div class="row sp"><button class="ghost" id="usePaste">Use Pasted</button>
       <span id="scriptInfo" class="pill">no script yet</span></div>

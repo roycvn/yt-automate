@@ -10,6 +10,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
+from .captions import _font_for
 from .images import generate_image
 
 W, H = 1280, 720
@@ -33,8 +34,8 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, Italic, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: BigTitle,Noto Sans Devanagari,150,{title_color},&H00000000,&H00000000,1,0,1,14,8,7,50,50,60,1
-Style: Banner,Noto Sans Devanagari,56,&H00FFFFFF,&H00000000,{accent_color},1,0,4,0,0,1,50,50,70,1
+Style: BigTitle,{font},150,{title_color},&H00000000,&H00000000,1,0,1,14,8,7,50,50,60,1
+Style: Banner,{banner_font},56,&H00FFFFFF,&H00000000,{accent_color},1,0,4,0,0,1,50,50,70,1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -57,12 +58,38 @@ def _still_clip(image: Path, out: Path, dur: float = 2.0) -> Path:
     return out
 
 
+def _script_of(text: str) -> str:
+    """Pick a language code based on the dominant Unicode block of `text`. Used
+    to choose a font that actually has the glyphs — libass with no fontconfig
+    can't fall back per-glyph, so a font without a script's table renders tofu
+    (the empty rectangles in the broken thumbnail). Latin/empty falls through
+    to plain Noto Sans which covers ASCII."""
+    if not text:
+        return "en"
+    if any("ఀ" <= c <= "౿" for c in text):
+        return "te"
+    if any("ऀ" <= c <= "ॿ" for c in text):
+        return "hi"
+    if any("஀" <= c <= "௿" for c in text):
+        return "ta"
+    if any("ಀ" <= c <= "೿" for c in text):
+        return "kn"
+    if any("ഀ" <= c <= "ൿ" for c in text):
+        return "ml"
+    if any("ঀ" <= c <= "৿" for c in text):
+        return "bn"
+    if any("઀" <= c <= "૿" for c in text):
+        return "gu"
+    return "en"
+
+
 def make_thumbnail(title: str, work: Path, *, klipr, upload_and_sign,
                    subject: str = "dramatic subject, strong emotion",
                    banner: str = "",
                    mood: str = "dramatic cinematic lighting, bold colors",
                    title_color: str = "&H00FFFFFF",
-                   accent_color: str = "&H000000FF") -> Path:
+                   accent_color: str = "&H000000FF",
+                   language: str = "hi") -> Path:
     """Produce a 1280x720 thumbnail with a huge title + optional banner burned in.
     `klipr` is a KliprClient; `upload_and_sign(path, key)` -> klipr-fetchable URL."""
     import asyncio
@@ -76,7 +103,14 @@ def make_thumbnail(title: str, work: Path, *, klipr, upload_and_sign,
     events = ["Dialogue: 0,0:00:00.00,0:00:02.00,BigTitle,,0,0,0,," + title]
     if banner:
         events.append("Dialogue: 0,0:00:00.00,0:00:02.00,Banner,,0,0,0,," + banner)
-    ass = THUMB_ASS_T.format(title_color=title_color, accent_color=accent_color,
+    # libass with klipr's fontsdir-only setup can't fall back per-glyph between
+    # fonts, so each style needs its own correct font. Pick fonts from each
+    # text's actual script — the title may be in the channel language while
+    # the banner is often English ("BASED ON A TRUE STORY") or vice versa.
+    title_font = _font_for(_script_of(title) if _script_of(title) != "en" else language)
+    banner_font = _font_for(_script_of(banner)) if banner else "Noto Sans"
+    ass = THUMB_ASS_T.format(font=title_font, banner_font=banner_font,
+                             title_color=title_color, accent_color=accent_color,
                              events="\n".join(events))
 
     url = upload_and_sign(clip, f"thumb/{int(time.time())}.mp4")
