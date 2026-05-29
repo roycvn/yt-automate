@@ -43,6 +43,24 @@ class KliprError(RuntimeError):
     pass
 
 
+_NET_ERRORS = (httpx.ConnectError, httpx.ReadError, httpx.ReadTimeout,
+               httpx.RemoteProtocolError, httpx.WriteError)
+
+
+async def _retry_net(call, *, tries: int = 4, label: str = "klipr"):
+    """Retry an async network call on transient httpx errors with backoff."""
+    last_err: Exception | None = None
+    for attempt in range(tries):
+        try:
+            return await call()
+        except _NET_ERRORS as e:  # type: ignore[misc]
+            last_err = e
+            if attempt >= tries - 1:
+                break
+            await asyncio.sleep(2 ** attempt)
+    raise KliprError(f"{label} network error after {tries} tries: {last_err}")
+
+
 class KliprClient:
     def __init__(self, api_key: str, base_url: str = "https://klipr.in/api/batch",
                  timeout: float = 60.0):
@@ -117,10 +135,14 @@ class KliprClient:
         import mimetypes
         p = Path(path)
         mime = mimetypes.guess_type(p.name)[0] or "video/mp4"
-        async with httpx.AsyncClient(timeout=180) as http:
-            with open(p, "rb") as fh:
-                r = await http.post(f"{self.base_url}/upload", headers=self._headers,
-                                    files={"file": (p.name, fh, mime)})
+
+        async def call() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=180) as http:
+                with open(p, "rb") as fh:
+                    return await http.post(f"{self.base_url}/upload",
+                                            headers=self._headers,
+                                            files={"file": (p.name, fh, mime)})
+        r = await _retry_net(call, label="klipr upload")
         self._raise_for(r)
         return r.json()["signed_url"]
 
@@ -187,8 +209,12 @@ class KliprClient:
         Set watermark=False to skip klipr's automatic mark (we add our own)."""
         payload = {"source_url": source_url, "ass": ass, "source_mime": source_mime,
                    "watermark": watermark}
-        async with httpx.AsyncClient(timeout=self.timeout * 5) as http:
-            r = await http.post(f"{self.base_url}/caption-burn", json=payload, headers=self._headers)
+
+        async def call() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=self.timeout * 5) as http:
+                return await http.post(f"{self.base_url}/caption-burn",
+                                        json=payload, headers=self._headers)
+        r = await _retry_net(call, label="klipr caption-burn")
         self._raise_for(r)
         body = r.json()
         return JobResult(id=body.get("output_key", ""), kind="caption_render",

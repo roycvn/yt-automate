@@ -145,8 +145,12 @@
 
   <div class="card">
     <h2><span class="badge">3</span> Generate video</h2>
-    <label class="mut" style="display:block;margin-bottom:10px">
+    <label class="mut" style="display:block;margin-bottom:6px">
       <input type="checkbox" id="makeShorts"> Also create a 9:16 Short (hook reframe)</label>
+    <label class="mut" style="display:block;margin-bottom:10px">
+      <input type="checkbox" id="muted"> Muted (no narration; background music still plays)
+      <span class="hint" style="margin-left:8px">scene length:
+        <input id="muteSeconds" type="text" value="5" style="width:50px;display:inline-block;padding:4px 8px">s</span></label>
     <button id="genVideo" disabled>🎬 Generate audio + video</button>
     <div id="videoStep" class="step"></div>
     <video id="player" class="hidden" controls></video>
@@ -262,6 +266,8 @@ $('genVideo').onclick=async()=>{try{script=JSON.parse($('scriptView').value);}ca
   fd.append('make_shorts',$('makeShorts').checked);
   fd.append('bottom_logo',bottomLogoMode());
   fd.append('intro_mode',introMode());
+  fd.append('muted',$('muted').checked);
+  fd.append('mute_seconds',parseInt($('muteSeconds').value)||5);
   if(musicMode()==='upload'&&$('musicFile').files[0])fd.append('music_file',$('musicFile').files[0]);
   if(bottomLogoMode()==='upload'&&$('logoFile').files[0])fd.append('logo_file',$('logoFile').files[0]);
   if(introMode()==='upload'&&$('introFile').files[0])fd.append('intro_file',$('introFile').files[0]);

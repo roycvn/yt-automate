@@ -62,6 +62,9 @@ def build_ass(scenes: list, audio_paths: list[Path], *,
     t = intro_s
     for sc, ap in zip(scenes, audio_paths):
         dur = max(wav_duration(ap), 1.0)
+        if not sc.narration.strip():
+            t += dur  # advance the timeline but emit no caption (muted scene)
+            continue
         sentences = _split_sentences(sc.narration) or [sc.narration]
         total_chars = sum(len(s) for s in sentences) or 1
         ct = t

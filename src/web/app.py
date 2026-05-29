@@ -79,6 +79,21 @@ LANG_DEFAULTS = {
 }
 
 
+def _silent_per_scene(scenes: list, out_dir: Path, seconds: float = 5.0) -> list[Path]:
+    """Make a silent WAV per scene so the muted pipeline still has timed audio
+    tracks for assembly (each clip = its image held for `seconds`)."""
+    import subprocess
+    out_dir.mkdir(parents=True, exist_ok=True)
+    paths: list[Path] = []
+    for sc in scenes:
+        p = out_dir / f"scene_{sc.id:02d}.wav"
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+                        "-i", "anullsrc=r=22050:cl=mono", "-t", f"{seconds}", str(p)],
+                       check=True)
+        paths.append(p)
+    return paths
+
+
 def generate_script(channel: dict, theme: str | None = None) -> StoryScript:
     """Thin wrapper around klipr's /api/batch/script — kept in this module so
     tests can monkeypatch it, and so the rest of yta doesn't import Anthropic."""
@@ -157,6 +172,7 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
                        music_intensity: float = Form(0.32), channel: str = Form("{}"),
                        make_shorts: bool = Form(False), bottom_logo: str = Form("default"),
                        intro_mode: str = Form("generate"),
+                       muted: bool = Form(False), mute_seconds: int = Form(5),
                        music_file: UploadFile | None = File(None),
                        logo_file: UploadFile | None = File(None),
                        intro_file: UploadFile | None = File(None)) -> dict:
@@ -187,13 +203,20 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
     def job(step):
         step("generating images")
         images = generate_scene_images(story.scenes, work / "images")
-        step("synthesizing narration")
-        audios = synthesize_scenes(story.scenes, work / "audio",
-                                   language=channel.get("language", "hi"),
-                                   speaker=channel.get("voice_speaker", "anushka"))
+        if muted:
+            step("preparing silent audio (muted)")
+            audios = _silent_per_scene(story.scenes, work / "audio", float(mute_seconds))
+            # No narration -> no scene captions; intro title still shown.
+            scenes_for_ass = [Scene(s.id, "", s.image_prompt) for s in story.scenes]
+        else:
+            step("synthesizing narration")
+            audios = synthesize_scenes(story.scenes, work / "audio",
+                                       language=channel.get("language", "hi"),
+                                       speaker=channel.get("voice_speaker", "anushka"))
+            scenes_for_ass = story.scenes
         step("assembling + background music")
         finished, ass, meta = build_finished_skeleton(
-            story.scenes, images, audios, work / "finish",
+            scenes_for_ass, images, audios, work / "finish",
             intro_title=story.title,
             outro_text=channel.get("outro_text", f"{channel.get('name','Subscribe')} 🔔"),
             music_mode=music_mode, music_path=music_path, music_intensity=music_intensity,
