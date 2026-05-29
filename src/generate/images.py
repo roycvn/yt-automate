@@ -29,12 +29,21 @@ def generate_image(prompt: str, dest: Path, aspect_ratio: str = "16:9",
     """Generate a single image from a prompt and save it to dest."""
     dest.parent.mkdir(parents=True, exist_ok=True)
     with httpx.Client(timeout=timeout_s) as http:
-        create = http.post(
-            f"{API}/models/{FLUX_MODEL}/predictions",
-            headers={**_headers(), "Prefer": "wait"},
-            json={"input": {"prompt": prompt, "aspect_ratio": aspect_ratio,
-                            "output_format": "png", "num_outputs": 1}},
-        )
+        # Replicate rate-limits bursts (429). Retry with exponential backoff.
+        create = None
+        for attempt in range(6):
+            create = http.post(
+                f"{API}/models/{FLUX_MODEL}/predictions",
+                headers={**_headers(), "Prefer": "wait"},
+                json={"input": {"prompt": prompt, "aspect_ratio": aspect_ratio,
+                                "output_format": "png", "num_outputs": 1}},
+            )
+            if create.status_code == 429:
+                retry_after = float(create.headers.get("retry-after", 0) or 0)
+                time.sleep(max(retry_after, 2 ** attempt))
+                continue
+            break
+        assert create is not None
         create.raise_for_status()
         pred = create.json()
         # With Prefer: wait the prediction is usually already terminal; poll otherwise.
