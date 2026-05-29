@@ -16,7 +16,7 @@ import json
 import os
 from dataclasses import dataclass, field, asdict
 
-DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_MODEL = "claude-haiku-4-5-20251001"   # ~5-10s vs sonnet ~30s
 
 # Channel profile keys (all optional; sensible fallbacks). Set in config.yaml.
 DEFAULT_PROFILE = {
@@ -112,7 +112,7 @@ def generate_script(channel: dict | None = None, theme: str | None = None,
     user = USER_TEMPLATE.format(theme=(theme + " ") if theme else "")
 
     client = Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
-    msg = client.messages.create(model=model, max_tokens=16000, system=system,
+    msg = client.messages.create(model=model, max_tokens=8000, system=system,
                                  messages=[{"role": "user", "content": user}])
     text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text").strip()
     if text.startswith("```"):

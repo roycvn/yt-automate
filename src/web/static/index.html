@@ -241,10 +241,15 @@ document.querySelectorAll('input[name=music]').forEach(r=>r.onchange=()=>
 document.querySelectorAll('input[name=intro]').forEach(r=>r.onchange=()=>
   $('introFile').classList.toggle('hidden',introMode()!=='upload'));
 
-$('genScript').onclick=async()=>{$('genScript').disabled=true;$('scriptInfo').textContent='generating…';
-  try{setScript(await(await fetch('/api/script',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({topic:$('topic').value,channel:buildChannel()})})).json());}
-  catch(e){$('scriptInfo').textContent='error';alert(e);}$('genScript').disabled=false;};
+$('genScript').onclick=async()=>{$('genScript').disabled=true;
+  const t0=Date.now();
+  const tick=setInterval(()=>{$('scriptInfo').textContent='generating… '+Math.floor((Date.now()-t0)/1000)+'s';},250);
+  try{const r=await fetch('/api/script',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({topic:$('topic').value,channel:buildChannel()})});
+      const j=await r.json(); if(!r.ok) throw new Error(j.error||('HTTP '+r.status));
+      setScript(j);}
+  catch(e){$('scriptInfo').textContent='error';alert(e.message||e);}
+  finally{clearInterval(tick);$('genScript').disabled=false;}};
 $('usePaste').onclick=async()=>{try{setScript(await(await fetch('/api/script',{method:'POST',
   headers:{'Content-Type':'application/json'},body:JSON.stringify({script:$('paste').value})})).json());}
   catch(e){alert('Invalid script JSON');}};

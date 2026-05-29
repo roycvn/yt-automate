@@ -11,7 +11,7 @@ channel:
   format: "narrated animated horror story with a strong everyday hook and a shocking twist"
   art_style: "2D animated horror cartoon, muted desaturated palette, volumetric moonlight, heavy shadows, cinematic, film grain"
   voice_speaker: anushka             # Sarvam speaker id
-  scenes: 16
+  scenes: 12
   outro_text: "TheStoryBoardz — सब्सक्राइब करें 🔔"
   title_suffix: " | TheStoryBoardz"
 
@@ -26,7 +26,7 @@ profiles:
     tone: "suspenseful, eerie, chilling"
     art_style: "2D animated horror cartoon, muted desaturated palette, moonlight, heavy shadows, cinematic"
     voice_speaker: anushka
-    scenes: 16
+    scenes: 12
     outro_text: "TheStoryBoardz — सब्सक्राइब करें 🔔"
     title_suffix: " | TheStoryBoardz"
   "Telugu Horror — TheStoryBoardz":
@@ -37,7 +37,7 @@ profiles:
     tone: "suspenseful, eerie, chilling"
     art_style: "2D animated horror cartoon, muted palette, moonlight, heavy shadows, cinematic"
     voice_speaker: vidya
-    scenes: 16
+    scenes: 12
     outro_text: "TheStoryBoardz — సబ్‌స్క్రైబ్ చేయండి 🔔"
     title_suffix: " | TheStoryBoardz"
   "Hindi Moral Stories":
