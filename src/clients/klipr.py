@@ -156,7 +156,17 @@ class KliprClient:
         up = await _retry_net(put_bytes, label="supabase upload")
         if up.status_code >= 400:
             raise KliprError(f"supabase upload PUT -> {up.status_code}: {up.text[:200]}")
-        return urls["signed_url"]
+
+        # Object now exists — ask klipr for the signed download URL.
+        async def sign() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=30) as http:
+                return await http.post(f"{self.base_url}/upload/sign",
+                                        headers={**self._headers,
+                                                 "Content-Type": "application/json"},
+                                        json={"key": urls["key"]})
+        s = await _retry_net(sign, label="klipr upload sign")
+        self._raise_for(s)
+        return s.json()["signed_url"]
 
     # ------------------------------------------------------------------ script
     async def generate_script(self, channel: dict, topic: str | None = None,
