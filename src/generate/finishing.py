@@ -109,10 +109,11 @@ def _mix_drone(video: Path, drone: Path, out: Path) -> Path:
 
 
 def add_logos(src: Path, out: Path, *, right_logo: Path | None = None,
-              bottom_logo: Path | None = None, right_scale: float = 0.12,
-              bottom_scale: float = 0.20, opacity: float = 0.9, margin: int = 36) -> Path:
-    """Overlay branding: `right_logo` mid-right ("Made with Klipr"), `bottom_logo`
-    bottom-center (channel logo). Missing logos are skipped. Re-encodes once."""
+              bottom_logo: Path | None = None, br_logo: Path | None = None,
+              right_scale: float = 0.12, bottom_scale: float = 0.20,
+              br_scale: float = 0.16, opacity: float = 0.9, margin: int = 36) -> Path:
+    """Overlay branding. `right_logo` mid-right, `bottom_logo` bottom-center,
+    `br_logo` bottom-right (footer). Missing logos are skipped. Re-encodes once."""
     inputs = ["-i", str(src)]
     filters: list[str] = []
     last = "0:v"
@@ -128,6 +129,12 @@ def add_logos(src: Path, out: Path, *, right_logo: Path | None = None,
         filters.append(
             f"[{idx}]format=rgba,colorchannelmixer=aa={opacity},scale=iw*{bottom_scale}:-1[b]")
         filters.append(f"[{last}][b]overlay=(W-w)/2:H-h-{margin}[v{idx}]")
+        last = f"v{idx}"; idx += 1
+    if br_logo and br_logo.exists():
+        inputs += ["-i", str(br_logo)]
+        filters.append(
+            f"[{idx}]format=rgba,colorchannelmixer=aa={opacity},scale=iw*{br_scale}:-1[br]")
+        filters.append(f"[{last}][br]overlay=W-w-{margin}:H-h-{margin}[v{idx}]")
         last = f"v{idx}"; idx += 1
     if not filters:
         return src

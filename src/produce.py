@@ -71,11 +71,9 @@ def produce(language: str = "hi", reuse_script: Path | None = None,
     with httpx.stream("GET", res.download_url, timeout=600) as r:
         r.raise_for_status()
         raw.write_bytes(r.read())
-    # Brand overlays: "Made with Klipr" (mid-right) + TheStoryBoardz (bottom).
-    logos = ROOT / "assets" / "logos"
+    # Brand overlay: TheStoryBoardz logo at footer-right.
     branded = add_logos(raw, work / "branded.mp4",
-                        right_logo=logos / "klipr.png",
-                        bottom_logo=logos / "storyboardz.png")
+                        br_logo=ROOT / "assets" / "logo_trans_white_letter.png")
     final = player_safe(branded, work / "final.mp4")
     print("final video:", final)
 
