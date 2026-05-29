@@ -60,7 +60,7 @@ def build_ass(scenes: list, audio_paths: list[Path], *,
     t = intro_s
     for sc, ap in zip(scenes, audio_paths):
         dur = max(wav_duration(ap), 1.0)
-        sentences = _split_sentences(sc.narration_hi) or [sc.narration_hi]
+        sentences = _split_sentences(sc.narration) or [sc.narration]
         total_chars = sum(len(s) for s in sentences) or 1
         ct = t
         for sent in sentences:

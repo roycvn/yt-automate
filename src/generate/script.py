@@ -1,10 +1,12 @@
-"""Automated original story-script generation via Claude.
+"""Automated script generation via Claude — niche-agnostic.
 
-Produces a 100%-original Hindi horror story in the proven niche format
-(chudail / dayan / bhoot, ordinary-object hook, twist ending) as a structured
-object: title + SEO + an ordered list of scenes, each with narration text and
-an image prompt. This is the creative core that drives image gen, TTS, and
-assembly downstream.
+Driven by a CHANNEL PROFILE (config), so the same engine writes for any
+channel: horror, moral stories, cooking, motivation, tech, history, etc. The
+model also returns a per-video THUMBNAIL CONCEPT (subject + hook text) chosen
+to fit *this* video — so thumbnails are contextual, not a fixed template.
+
+Output is a structured object: title + SEO + ordered scenes (narration +
+image prompt) + thumbnail concept.
 
 Env: ANTHROPIC_API_KEY
 """
@@ -14,75 +16,114 @@ import json
 import os
 from dataclasses import dataclass, field, asdict
 
-DEFAULT_MODEL = "claude-opus-4-7"
+DEFAULT_MODEL = "claude-sonnet-4-6"
 
-SYSTEM = """You are a writer for a Hindi animated horror-story YouTube channel
-(genre: चुड़ैल / डायन / भूत — like "Scary Pumpkin" style, but ALL CONTENT MUST BE
-100% ORIGINAL — never reuse existing stories, names, or plots). Your stories:
-- run ~3-5 minutes narrated (≈ 14-18 short scenes),
-- open with an everyday hook (an ordinary object/place/person) that turns supernatural,
-- build dread, deliver a sharp twist, end with a chilling final line,
-- are written in natural spoken Hindi (Devanagari), narrator voice.
-
-Return ONLY valid JSON, no prose, in exactly this shape:
-{
-  "title_hi": "<catchy Hindi title>",
-  "title_translit": "<roman transliteration>",
-  "description": "<2-3 line Hindi+English description with keywords>",
-  "tags": ["...", "..."],            // 10-15 search tags
-  "scenes": [
-    {"id": 1, "narration_hi": "<1-3 sentences of narration>",
-     "image_prompt": "<detailed English image prompt: dark 2D animated horror cartoon style, the scene, mood, lighting>"}
-  ]
+# Channel profile keys (all optional; sensible fallbacks). Set in config.yaml.
+DEFAULT_PROFILE = {
+    "name": "My Channel",
+    "language": "hi",
+    "language_name": "Hindi (Devanagari)",
+    "niche": "short engaging stories",
+    "tone": "engaging, clear, emotionally resonant",
+    "audience": "general audience",
+    "format": "narrated story with a strong hook and a satisfying payoff",
+    "art_style": "cinematic, high quality, consistent style across scenes",
+    "scenes": 16,
 }
-Image prompts must all specify the SAME consistent art style so scenes look
-like one film: "2D animated horror cartoon, muted desaturated palette,
-volumetric moonlight, heavy shadows, cinematic". Keep characters visually
-consistent across scenes (describe them the same way each time)."""
 
-USER_TEMPLATE = """Write a NEW original Hindi animated horror story.
-Theme hint: {theme}
-Make it genuinely original (do not copy any known story). 14-18 scenes."""
+SYSTEM_TEMPLATE = """You are a scriptwriter + creative director for the YouTube
+channel "{name}".
+
+CHANNEL PROFILE
+- Niche: {niche}
+- Tone: {tone}
+- Target audience: {audience}
+- Video format: {format}
+- Narration language: {language_name}
+
+TASK
+Write ONE original, 100% new video for this channel ({scenes} scenes,
+~3-5 min narrated). Never copy existing works, names, or plots. Open with a
+strong hook, sustain interest, and land a satisfying ending appropriate to the
+niche. Narration must be natural spoken {language_name}.
+
+Also design a THUMBNAIL CONCEPT that best sells THIS specific video: pick the
+single most click-worthy visual subject from the story and a 2-5 word hook.
+
+Every image_prompt MUST begin with this exact art-style prefix so all scenes
+look like one production: "{art_style}". Keep characters/objects visually
+consistent by describing them the same way each time.
+
+Return ONLY valid JSON, no prose:
+{{
+  "title": "<catchy title in {language_name}>",
+  "title_translit": "<roman transliteration, or repeat title if already latin>",
+  "description": "<2-3 line description with natural keywords>",
+  "tags": ["...", "..."],            // 10-15 search tags for this niche
+  "thumbnail": {{
+     "subject": "<vivid English description of the thumbnail's main visual — a
+                 person/object/scene with strong emotion, fit for this niche>",
+     "hook": "<2-5 word on-image hook in {language_name}>",
+     "mood": "<color/lighting mood, e.g. 'dark red/teal, dramatic' or
+              'bright warm, appetizing'>"
+  }},
+  "scenes": [
+    {{"id": 1, "narration": "<1-3 sentences>",
+      "image_prompt": "<art-style prefix + this scene, detailed>"}}
+  ]
+}}"""
+
+USER_TEMPLATE = "Create the next video. {theme}Make it genuinely original."
 
 
 @dataclass
 class Scene:
     id: int
-    narration_hi: str
+    narration: str
     image_prompt: str
 
 
 @dataclass
+class ThumbnailConcept:
+    subject: str
+    hook: str
+    mood: str = ""
+
+
+@dataclass
 class StoryScript:
-    title_hi: str
+    title: str
     title_translit: str
     description: str
     tags: list[str]
+    thumbnail: ThumbnailConcept
     scenes: list[Scene] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return asdict(self)
 
 
-def generate_script(theme: str = "एक आम सी चीज़ जो धीरे-धीरे डरावनी हो जाती है",
-                    model: str = DEFAULT_MODEL,
-                    api_key: str | None = None) -> StoryScript:
+def generate_script(channel: dict | None = None, theme: str | None = None,
+                    model: str = DEFAULT_MODEL, api_key: str | None = None) -> StoryScript:
     from anthropic import Anthropic
 
+    profile = {**DEFAULT_PROFILE, **(channel or {})}
+    system = SYSTEM_TEMPLATE.format(**profile)
+    user = USER_TEMPLATE.format(theme=(theme + " ") if theme else "")
+
     client = Anthropic(api_key=api_key or os.environ["ANTHROPIC_API_KEY"])
-    msg = client.messages.create(
-        model=model,
-        max_tokens=16000,
-        system=SYSTEM,
-        messages=[{"role": "user", "content": USER_TEMPLATE.format(theme=theme)}],
-    )
+    msg = client.messages.create(model=model, max_tokens=16000, system=system,
+                                 messages=[{"role": "user", "content": user}])
     text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text").strip()
-    # Strip accidental code fences.
     if text.startswith("```"):
         text = text.split("```", 2)[1].lstrip("json").strip()
     data = json.loads(text)
-    scenes = [Scene(**s) for s in data["scenes"]]
+
+    th = data.get("thumbnail", {})
     return StoryScript(
-        title_hi=data["title_hi"], title_translit=data["title_translit"],
-        description=data["description"], tags=data["tags"], scenes=scenes,
+        title=data["title"], title_translit=data.get("title_translit", data["title"]),
+        description=data["description"], tags=data["tags"],
+        thumbnail=ThumbnailConcept(subject=th.get("subject", ""),
+                                   hook=th.get("hook", ""), mood=th.get("mood", "")),
+        scenes=[Scene(**s) for s in data["scenes"]],
     )

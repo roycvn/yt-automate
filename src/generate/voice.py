@@ -79,6 +79,6 @@ def synthesize_scenes(scenes: list, out_dir: Path, language: str = "hi",
     paths: list[Path] = []
     for sc in scenes:
         p = out_dir / f"scene_{sc.id:02d}.wav"
-        synthesize(sc.narration_hi, p, language=language, speaker=speaker)
+        synthesize(sc.narration, p, language=language, speaker=speaker)
         paths.append(p)
     return paths

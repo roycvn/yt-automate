@@ -1,3 +1,20 @@
+# CHANNEL PROFILE — the single source of "what this channel is". Swap this whole
+# block and yta produces for ANY niche (horror, cooking, motivation, tech...).
+# Drives script generation, art style, voice, thumbnail concept, SEO, outro.
+channel:
+  name: TheStoryBoardz
+  language: hi                       # ISO code -> Sarvam voice + captions
+  language_name: "Hindi (Devanagari)"
+  niche: "Original Hindi animated horror stories — chudail/ghost/supernatural, an ordinary object or place that turns sinister, with a chilling twist ending"
+  tone: "suspenseful, dread-building, eerie, chilling"
+  audience: "Hindi-speaking horror & scary-story fans"
+  format: "narrated animated horror story with a strong everyday hook and a shocking twist"
+  art_style: "2D animated horror cartoon, muted desaturated palette, volumetric moonlight, heavy shadows, cinematic, film grain"
+  voice_speaker: anushka             # Sarvam speaker id
+  scenes: 16
+  outro_text: "TheStoryBoardz — सब्सक्राइब करें 🔔"
+  title_suffix: " | TheStoryBoardz"
+
 channels:
   hindi:
     youtube_channel_id: "UC_REPLACE_HINDI"

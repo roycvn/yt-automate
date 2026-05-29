@@ -1,48 +1,43 @@
-"""SEO + monetization-friendly metadata for the upload.
+"""SEO + monetization-friendly metadata — niche-agnostic.
 
-Builds a keyword-rich description (search keywords, hashtags, CTA, chapters
-placeholder) and a deduped tag list from the generated script's title/tags.
-Designed for the Hindi/Telugu animated-horror niche.
+Builds a keyword-rich description (keywords, hashtags, CTA) and a deduped tag
+list from the generated script's own title/description/tags plus optional
+channel-level evergreen tags. No niche assumptions baked in.
 """
 from __future__ import annotations
 
-# Evergreen niche keywords appended to every video's tag set for reach.
-BASE_TAGS = [
-    "horror story", "hindi horror story", "animated horror", "bhoot ki kahani",
-    "chudail ki kahani", "scary stories", "horror kahani", "हिंदी हॉरर कहानी",
-    "डरावनी कहानी", "भूत की कहानी", "animated horror stories hindi",
-    "moral story", "horror cartoon", "ghost story hindi",
-]
-
-CTA = (
-    "🔔 चैनल को SUBSCRIBE करें और घंटी दबाएँ — हर हफ़्ते नई डरावनी कहानी!\n"
-    "👍 वीडियो पसंद आए तो LIKE करें और दोस्तों के साथ SHARE करें।"
-)
+import re
 
 
-def build_description(title_hi: str, title_translit: str, base_desc: str,
-                      tags: list[str], language: str = "hi") -> str:
-    """Compose a keyword-rich, monetization-friendly description."""
-    keywords = ", ".join(dict.fromkeys(tags + BASE_TAGS))
-    hashtags = " ".join(
-        "#" + t.replace(" ", "").replace("ी", "i")  # ascii-ish hashtags help discovery
-        for t in ["HorrorStory", "HindiHorror", "BhootKiKahani", "ChudailKiKahani",
-                  "AnimatedHorror", "ScaryStories", "HindiKahaniya"]
-    )
+def _hashtags(tags: list[str], limit: int = 6) -> str:
+    out = []
+    for t in tags:
+        h = re.sub(r"[^0-9A-Za-zऀ-ॿఀ-౿]", "", t.title().replace(" ", ""))
+        if h:
+            out.append("#" + h)
+        if len(out) >= limit:
+            break
+    return " ".join(out)
+
+
+def build_description(title: str, title_translit: str, base_desc: str,
+                      tags: list[str], channel: dict | None = None) -> str:
+    channel = channel or {}
+    name = channel.get("name", "our channel")
+    cta = channel.get("cta", "🔔 Subscribe & hit the bell for new videos every week!\n👍 Like & share if you enjoyed.")
+    keywords = ", ".join(dict.fromkeys(tags))
     return (
         f"{base_desc}\n\n"
-        f"{title_hi} ({title_translit}) — एक नई एनिमेटेड हॉरर कहानी।\n\n"
-        f"{CTA}\n\n"
-        f"इस कहानी में: {title_hi}. अगर आपको डरावनी कहानियाँ, भूत-प्रेत, चुड़ैल और "
-        f"रहस्यमयी कहानियाँ पसंद हैं तो यह चैनल आपके लिए है।\n\n"
-        f"🔎 Keywords: {keywords}\n\n"
-        f"{hashtags}"
+        f"{title}" + (f" ({title_translit})" if title_translit and title_translit != title else "") + "\n\n"
+        f"{cta}\n\n"
+        f"🔎 {keywords}\n\n"
+        f"{_hashtags(tags)}"
     )
 
 
-def build_tags(tags: list[str]) -> list[str]:
-    """Merge script tags with evergreen niche tags, dedup, cap at 30 (~500 char)."""
-    merged = list(dict.fromkeys([*tags, *BASE_TAGS]))
+def build_tags(tags: list[str], base_tags: list[str] | None = None) -> list[str]:
+    """Merge script tags with optional channel evergreen tags; dedup; cap (<500 chars)."""
+    merged = list(dict.fromkeys([*tags, *(base_tags or [])]))
     out, total = [], 0
     for t in merged:
         if total + len(t) + 1 > 480 or len(out) >= 30:
