@@ -81,6 +81,7 @@ class Scene:
     id: int
     narration: str
     image_prompt: str
+    duration_seconds: float | None = None   # optional override (used by muted)
 
 
 @dataclass

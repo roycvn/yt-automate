@@ -48,7 +48,8 @@ def load_or_generate_script(out: Path, reuse: Path | None, channel: dict) -> Sto
             d["description"], d["tags"],
             ThumbnailConcept(th.get("subject", ""), th.get("hook", ""), th.get("mood", "")),
             [Scene(s["id"], s.get("narration") or s.get("narration_hi", ""),
-                   s["image_prompt"]) for s in d["scenes"]])
+                   s["image_prompt"], s.get("duration_seconds"))
+             for s in d["scenes"]])
     s = generate_script(channel=channel)
     (out / "script.json").write_text(json.dumps(s.to_dict(), ensure_ascii=False, indent=2))
     return s

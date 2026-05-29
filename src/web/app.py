@@ -87,8 +87,9 @@ def _silent_per_scene(scenes: list, out_dir: Path, seconds: float = 5.0) -> list
     paths: list[Path] = []
     for sc in scenes:
         p = out_dir / f"scene_{sc.id:02d}.wav"
+        dur = float(getattr(sc, "duration_seconds", None) or seconds)
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
-                        "-i", "anullsrc=r=22050:cl=mono", "-t", f"{seconds}", str(p)],
+                        "-i", "anullsrc=r=22050:cl=mono", "-t", f"{dur}", str(p)],
                        check=True)
         paths.append(p)
     return paths
@@ -117,7 +118,8 @@ def _script_from_dict(d: dict) -> StoryScript:
         description=d.get("description", ""), tags=d.get("tags", []),
         thumbnail=ThumbnailConcept(th.get("subject", ""), th.get("hook", ""), th.get("mood", "")),
         scenes=[Scene(s["id"], s.get("narration") or s.get("narration_hi", ""),
-                      s["image_prompt"]) for s in d.get("scenes", [])])
+                      s["image_prompt"], s.get("duration_seconds"))
+                for s in d.get("scenes", [])])
 
 
 def _run_job(fn) -> str:
@@ -207,7 +209,8 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
             step("preparing silent audio (muted)")
             audios = _silent_per_scene(story.scenes, work / "audio", float(mute_seconds))
             # No narration -> no scene captions; intro title still shown.
-            scenes_for_ass = [Scene(s.id, "", s.image_prompt) for s in story.scenes]
+            scenes_for_ass = [Scene(s.id, "", s.image_prompt, s.duration_seconds)
+                              for s in story.scenes]
         else:
             step("synthesizing narration")
             audios = synthesize_scenes(story.scenes, work / "audio",
