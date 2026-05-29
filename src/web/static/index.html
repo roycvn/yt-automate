@@ -84,8 +84,11 @@
     </div>
     <input id="logoFile" type="file" accept="image/png,image/*" class="hidden sp" />
 
-    <label class="sp" style="display:block;color:var(--mut)">
-      <input type="checkbox" id="premium"> ⭐ Premium — remove “Made with Klipr” watermark</label>
+    <p class="hint sp">Plan — Free keeps “Made with Klipr” (top-right); Premium removes it.</p>
+    <div class="seg" id="planSeg">
+      <label><input type="radio" name="plan" value="free" checked><span>Free</span></label>
+      <label><input type="radio" name="plan" value="premium"><span>⭐ Premium</span></label>
+    </div>
 
     <div class="row sp">
       <span class="pill" id="voicePill">voice: —</span>
@@ -202,7 +205,8 @@ function fillChannel(c){$('chName').value=c.name||'';$('niche').value=c.niche||'
 function buildChannel(){return{name:$('chName').value,niche:$('niche').value,tone:$('tone').value,
   art_style:$('artStyle').value,outro_text:$('outro').value,language:$('language').value,
   language_name:$('language').selectedOptions[0].textContent,voice_speaker:$('voice').value,
-  scenes:parseInt($('scenes').value)||16,premium:$('premium').checked};}
+  scenes:parseInt($('scenes').value)||16,
+  premium:document.querySelector('input[name=plan]:checked').value==='premium'};}
 
 async function poll(jid,onStep){while(true){const j=await(await fetch('/api/job/'+jid)).json();
   onStep(j.step||'');if(j.status==='done')return j.result;if(j.status==='error')throw new Error(j.error||'failed');
