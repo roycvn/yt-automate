@@ -29,14 +29,30 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from .clients.klipr import KliprClient, KliprError
+from .clients.youtube import YouTubeClient
 from .config import load_config
 
 ROOT = Path(__file__).resolve().parent.parent
+
+# Map a target language to the env suffix for its channel refresh token,
+# e.g. te -> YOUTUBE_REFRESH_TOKEN_TELUGU.
+LANG_ENV = {"hi": "HINDI", "te": "TELUGU", "ta": "TAMIL"}
 
 
 def load_sources() -> list[dict]:
     data = json.loads((ROOT / "source_manifest.json").read_text())
     return data.get("videos", [])
+
+
+def youtube_client_for(lang: str) -> YouTubeClient | None:
+    """Build a YouTubeClient for a language's channel, or None if not configured."""
+    cid = os.environ.get("YOUTUBE_CLIENT_ID")
+    secret = os.environ.get("YOUTUBE_CLIENT_SECRET")
+    suffix = LANG_ENV.get(lang, lang.upper())
+    refresh = os.environ.get(f"YOUTUBE_REFRESH_TOKEN_{suffix}")
+    if not (cid and secret and refresh):
+        return None
+    return YouTubeClient(cid, secret, refresh)
 
 
 async def process_video(client: KliprClient, video: dict, target_langs: list[str],
@@ -58,7 +74,27 @@ async def process_video(client: KliprClient, video: dict, target_langs: list[str
                 source_url, target_language=lang,
                 source_type=source_type, source_language=source_lang,
             )
-            result["dubs"][lang] = {"status": res.status, "download_url": res.download_url}
+            entry = {"status": res.status, "download_url": res.download_url}
+            # Publish to YouTube if the channel for this language is configured.
+            if res.status == "ready" and res.download_url:
+                yt = youtube_client_for(lang)
+                if yt is None:
+                    entry["youtube"] = "skipped: no channel creds"
+                else:
+                    title = video.get("title") or f"{video.get('id')} [{lang}]"
+                    try:
+                        vid = yt.upload_from_url(
+                            res.download_url, title=title,
+                            description=video.get("description", ""),
+                            tags=video.get("tags", []),
+                            privacy=video.get("privacy", "private"),
+                            language=lang,
+                        )
+                        entry["youtube"] = {"video_id": vid,
+                                            "url": f"https://youtu.be/{vid}"}
+                    except Exception as e:  # upload failures shouldn't kill the run
+                        entry["youtube"] = {"error": str(e)[:300]}
+            result["dubs"][lang] = entry
         except (KliprError, TimeoutError) as e:
             result["dubs"][lang] = {"status": "error", "error": str(e)}
     return result
