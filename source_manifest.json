@@ -3,11 +3,11 @@
   "videos": [
     {
       "id": "pipeline-test-short",
-      "owner_confirmed": true,
+      "owner_confirmed": false,
       "source_type": "youtube",
       "source_url": "https://www.youtube.com/watch?v=xMaWz3zuk_k",
       "source_language": "hi",
-      "note": "Used only to verify the cron → klipr dub path end-to-end. Replace with your own content for real runs."
+      "note": "DISABLED. Was only a pipeline test; not owned content, so never publish it. Only add owner_confirmed=true entries for videos you create."
     },
     {
       "id": "example-your-content",
