@@ -145,7 +145,7 @@ def api_script(payload: dict) -> dict:
 @app.post("/api/generate")
 async def api_generate(script: str = Form(...), music_mode: str = Form("generate"),
                        music_intensity: float = Form(0.32), channel: str = Form("{}"),
-                       make_shorts: bool = Form(False),
+                       make_shorts: bool = Form(False), bottom_logo: str = Form("default"),
                        music_file: UploadFile | None = File(None),
                        logo_file: UploadFile | None = File(None)) -> dict:
     cfg = load_config()
@@ -192,9 +192,12 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
         items = []
         for it in cfg.get("branding", {}).get("logos", []):
             entry = {**it, "path": str(ROOT / it["path"])}
-            # Swap the bottom-right (channel) logo for the uploaded one if given.
-            if custom_logo is not None and it.get("position") == "bottom-right":
-                entry["path"] = str(custom_logo)
+            if it.get("position") == "bottom-right":
+                # Channel logo: none | upload (custom) | default (config).
+                if bottom_logo == "none":
+                    continue
+                if bottom_logo == "upload" and custom_logo is not None:
+                    entry["path"] = str(custom_logo)
             items.append(entry)
         branded = overlay_logos(raw, work / "branded.mp4", items)
         final = player_safe(branded, work / "final.mp4")

@@ -68,12 +68,22 @@
 
   <div class="card">
     <h2><span class="badge">0</span> Channel</h2>
-    <div class="grid2">
+    <label class="hint" style="display:block;margin-bottom:5px">Language (sets voice, outro & a matching preset)</label>
+    <select id="language" title="Language — drives the whole profile"></select>
+    <div class="grid2 sp">
       <select id="profile" title="Pick a preset"></select>
-      <select id="language" title="Language — auto-sets voice & outro"></select>
+      <input id="chName" type="text" placeholder="Channel name — e.g. TheStoryBoardz" />
     </div>
-    <input id="chName" class="sp" type="text" placeholder="Channel name — e.g. TheStoryBoardz" />
-    <input id="niche" class="sp" type="text" placeholder="Niche — e.g. 'Hindi animated horror stories with a twist ending'" />
+    <input id="niche" class="sp" type="text" placeholder="Niche — e.g. 'animated horror stories with a twist ending'" />
+
+    <p class="hint sp">Bottom-right logo (your channel logo). “Made with Klipr” always stays top-right.</p>
+    <div class="seg" id="logoSeg">
+      <label><input type="radio" name="blogo" value="default" checked><span>Default</span></label>
+      <label><input type="radio" name="blogo" value="upload"><span>Upload</span></label>
+      <label><input type="radio" name="blogo" value="none"><span>Don’t add</span></label>
+    </div>
+    <input id="logoFile" type="file" accept="image/png,image/*" class="hidden sp" />
+
     <div class="row sp">
       <span class="pill" id="voicePill">voice: —</span>
       <span class="pill" id="lenPill">~0:00</span>
@@ -87,9 +97,6 @@
       <input id="tone" class="sp" type="text" placeholder="Tone — e.g. 'suspenseful, eerie, chilling'" />
       <input id="artStyle" class="sp" type="text" placeholder="Art style — e.g. '2D animated horror, moonlight, heavy shadows'" />
       <input id="outro" class="sp" type="text" placeholder="Outro / subscribe text" />
-      <p class="hint sp">Channel logo (bottom-right) — upload a transparent PNG to override the default:</p>
-      <input id="logoFile" type="file" accept="image/png,image/*" />
-      <p class="hint">“Made with Klipr” stays top-right on every video.</p>
     </div>
   </div>
 
@@ -166,6 +173,13 @@ function updateMeta(){
 }
 function applyLang(){const d=langDefaults[$('language').value];if(!d)return;
   $('voice').value=d.voice_speaker;$('outro').value=($('chName').value||'Subscribe')+' — '+d.subscribe;updateMeta();}
+function onLangChange(){           // language drives the whole profile
+  const lang=$('language').value;
+  const match=Object.keys(profiles).find(n=>profiles[n].language===lang);
+  if(match){$('profile').value=match;fillChannel(profiles[match]);}  // matching preset
+  else applyLang();                                                  // at least voice+outro
+}
+const bottomLogoMode=()=>document.querySelector('input[name=blogo]:checked').value;
 function fillChannel(c){$('chName').value=c.name||'';$('niche').value=c.niche||'';
   $('tone').value=c.tone||'';$('artStyle').value=c.art_style||'';$('outro').value=c.outro_text||'';
   $('scenes').value=c.scenes||16;if(c.language)$('language').value=c.language;
@@ -191,7 +205,9 @@ async function initChannels(){
   $('profile').innerHTML=['<option value="">— custom —</option>',...names.map(n=>`<option value="${n}">${n}</option>`)].join('');
   if(names.length){$('profile').value=names[0];fillChannel(profiles[names[0]]);}else fillChannel(d.default||{});
   $('profile').onchange=()=>fillChannel($('profile').value?profiles[$('profile').value]:d.default);
-  $('language').onchange=applyLang;$('voice').onchange=updateMeta;$('scenes').oninput=updateMeta;
+  $('language').onchange=onLangChange;$('voice').onchange=updateMeta;$('scenes').oninput=updateMeta;
+  document.querySelectorAll('input[name=blogo]').forEach(r=>r.onchange=()=>
+    $('logoFile').classList.toggle('hidden',bottomLogoMode()!=='upload'));
   $('advToggle').onclick=()=>{const a=$('advanced');a.classList.toggle('hidden');
     $('advToggle').textContent=a.classList.contains('hidden')?'Advanced ▸':'Advanced ▾';};
 }
@@ -217,8 +233,9 @@ $('genVideo').onclick=async()=>{try{script=JSON.parse($('scriptView').value);}ca
   const fd=new FormData();fd.append('script',JSON.stringify(script));fd.append('music_mode',musicMode());
   fd.append('music_intensity',$('intensity').value);fd.append('channel',JSON.stringify(buildChannel()));
   fd.append('make_shorts',$('makeShorts').checked);
+  fd.append('bottom_logo',bottomLogoMode());
   if(musicMode()==='upload'&&$('musicFile').files[0])fd.append('music_file',$('musicFile').files[0]);
-  if($('logoFile').files[0])fd.append('logo_file',$('logoFile').files[0]);
+  if(bottomLogoMode()==='upload'&&$('logoFile').files[0])fd.append('logo_file',$('logoFile').files[0]);
   try{const{job_id}=await(await fetch('/api/generate',{method:'POST',body:fd})).json();
     const res=await poll(job_id,s=>running($('videoStep'),s));work=res.work;ok($('videoStep'),'video ready');
     $('player').src=res.video_url+'?t='+Date.now();$('player').classList.remove('hidden');
