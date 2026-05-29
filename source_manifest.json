@@ -1,12 +1,21 @@
 {
-  "$comment": "Ownership gate. Every source video must be listed with owner_confirmed=true and proof before it can enter the pipeline. Files not listed (or with owner_confirmed=false) are quarantined.",
+  "$comment": "Ownership gate for the yta runner (src/run.py). Only entries with owner_confirmed=true are processed. The dub flow pulls from source_url, so ONLY list content you own — re-dubbing third-party videos is still copyright infringement (Content ID matches the visuals regardless of audio language). Schema per entry: id, owner_confirmed, source_type ('youtube'|'upload'), source_url (YouTube watch URL, or a Firebase Storage https URL for uploads), source_language (ISO, e.g. 'hi').",
   "videos": [
     {
-      "id": "example-001",
-      "path": "/absolute/path/to/your/original.mp4",
+      "id": "pipeline-test-short",
+      "owner_confirmed": true,
+      "source_type": "youtube",
+      "source_url": "https://www.youtube.com/watch?v=xMaWz3zuk_k",
+      "source_language": "hi",
+      "note": "Used only to verify the cron → klipr dub path end-to-end. Replace with your own content for real runs."
+    },
+    {
+      "id": "example-your-content",
       "owner_confirmed": false,
-      "proof": "link or note to original project file / proof of creation",
-      "license": "owned"
+      "source_type": "youtube",
+      "source_url": "https://www.youtube.com/watch?v=REPLACE_ME",
+      "source_language": "hi",
+      "note": "Set owner_confirmed=true ONLY for videos you own. Add as many entries as you like."
     }
   ]
 }
