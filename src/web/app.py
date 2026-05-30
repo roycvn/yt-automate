@@ -21,7 +21,8 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -42,8 +43,54 @@ WORK_ROOT = ROOT / "artifacts" / "web"
 STATIC = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="yta studio")
+# CORS is wide open by design — the worker is fronted by a shared
+# WORKER_TOKEN bearer for JSON routes (see middleware below) and the
+# media routes are accessed via unguessable work-id UUIDs. The Klipr
+# browser needs to fetch /api/video/<work> directly, so we can't
+# restrict origins without a per-origin allowlist.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
 _pool = ThreadPoolExecutor(max_workers=2)
 _jobs: dict[str, dict] = {}
+
+
+# When deployed as a public worker (e.g. Railway behind klipr), every /api/*
+# route is gated by a shared bearer token. Local dev leaves WORKER_TOKEN
+# unset → the gate is a no-op so the bundled UI keeps working without
+# auth. The middleware fires before any handler, so we don't have to add
+# a Depends() to each route — keeps the in-tree UI's plain fetch() calls
+# working untouched.
+import os as _os  # noqa: E402
+
+_WORKER_TOKEN = _os.environ.get("WORKER_TOKEN") or _os.environ.get("YTA_WORKER_TOKEN")
+
+
+_PUBLIC_PREFIXES = (
+    "/api/video/", "/api/thumb/", "/api/download/", "/api/short/",
+    "/api/download_short/",
+)
+
+
+@app.middleware("http")
+async def _gate(request: Request, call_next):  # type: ignore[no-untyped-def]
+    # Media routes are intentionally unauthenticated so the end user's
+    # browser can fetch the finished video directly via a signed-ish
+    # work-id URL (the work id is a UUID and effectively unguessable).
+    path = request.url.path
+    if (
+        _WORKER_TOKEN
+        and path.startswith("/api/")
+        and not any(path.startswith(p) for p in _PUBLIC_PREFIXES)
+    ):
+        header = request.headers.get("authorization") or ""
+        sent = header.removeprefix("Bearer ").strip()
+        if sent != _WORKER_TOKEN:
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+    return await call_next(request)
 
 # Sarvam bulbul:v2 speakers + supported languages for the UI pickers.
 VOICES = [
