@@ -172,6 +172,46 @@ class KliprClient:
         self._raise_for(s)
         return s.json()["signed_url"]
 
+    async def upload_file_keyed(self, path: Path) -> tuple[str, str]:
+        """Like upload_file() but also returns the durable storage `key`.
+
+        The key is what klipr needs to persist for re-signing later — signed
+        URLs expire after 1h, but the underlying object lives forever. Used
+        by the /dashboard/yt-automate library-persistence flow."""
+        import mimetypes
+        p = Path(path)
+        mime = mimetypes.guess_type(p.name)[0] or "video/mp4"
+
+        async def presign() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=30) as http:
+                return await http.post(f"{self.base_url}/upload",
+                                        headers={**self._headers,
+                                                 "Content-Type": "application/json"},
+                                        json={"filename": p.name})
+        r = await _retry_net(presign, label="klipr upload presign")
+        self._raise_for(r)
+        urls = r.json()
+        key = urls["key"]
+
+        async def put_bytes() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=600) as http:
+                with open(p, "rb") as fh:
+                    return await http.put(urls["signed_upload_url"], content=fh.read(),
+                                          headers={"Content-Type": mime, "x-upsert": "true"})
+        up = await _retry_net(put_bytes, label="supabase upload")
+        if up.status_code >= 400:
+            raise KliprError(f"supabase upload PUT -> {up.status_code}: {up.text[:200]}")
+
+        async def sign() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=30) as http:
+                return await http.post(f"{self.base_url}/upload/sign",
+                                        headers={**self._headers,
+                                                 "Content-Type": "application/json"},
+                                        json={"key": key})
+        s = await _retry_net(sign, label="klipr upload sign")
+        self._raise_for(s)
+        return key, s.json()["signed_url"]
+
     # ------------------------------------------------------------------ script
     async def generate_script(self, channel: dict, topic: str | None = None,
                               model: str | None = None) -> dict:

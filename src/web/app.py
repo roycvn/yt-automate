@@ -313,11 +313,31 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
             items.append(entry)
         branded = overlay_logos(raw, work / "branded.mp4", items)
         final = player_safe(branded, work / "final.mp4")
-        result = {"work": work.name, "video_url": f"/api/video/{work.name}"}
+        result = {
+            "work": work.name,
+            "video_url": f"/api/video/{work.name}",
+            "title": story.title,
+            "language": channel.get("language", "hi"),
+            "script": story.to_dict(),
+        }
         if make_shorts:
             step("creating Short (9:16)")
             make_short(final, work / "short.mp4")
             result["short_url"] = f"/api/short/{work.name}"
+        # Persist to klipr's reels-output so the caller can store durable
+        # storage keys in its library DB. Best-effort: if the upload fails we
+        # still hand back the ephemeral worker URLs above so the user at
+        # least sees the render — the missing keys just mean "not in library".
+        try:
+            step("saving to your library")
+            video_key, _ = asyncio.run(klipr.upload_file_keyed(final))
+            result["video_key"] = video_key
+            short_path = work / "short.mp4"
+            if make_shorts and short_path.exists():
+                short_key, _ = asyncio.run(klipr.upload_file_keyed(short_path))
+                result["short_key"] = short_key
+        except Exception as e:  # noqa: BLE001 — best-effort persistence
+            result["library_error"] = f"{type(e).__name__}: {str(e)[:200]}"
         return result
 
     return {"job_id": _run_job(job)}
