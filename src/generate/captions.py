@@ -82,7 +82,18 @@ def build_ass(scenes: list, audio_paths: list[Path], *,
     # Intro title card — only when we generated a title card (intro_title set
     # and there's intro time). For uploaded/no intro, skip the title event.
     if intro_title and intro_s > 0.5:
-        intro_fx = r"{\fad(600,500)\t(0,2400,\fscx118\fscy118)}"
+        # libass falls back to its simple (non-HarfBuzz) shaper for events that
+        # carry an animated \t() transform — re-shaping every frame is too
+        # expensive, so it ships glyphs without Indic GSUB substitution. The
+        # net effect was Telugu/Devanagari titles rendering with explicit
+        # viramas instead of subscript conjuncts ("దర్పణం" → "ద ర ్ ప"). For
+        # Indic scripts we drop the scale animation and keep only the fade
+        # (which doesn't affect glyph layout); Latin titles keep the bounce.
+        is_indic = _font_for(language) != "Noto Sans"
+        intro_fx = (
+            r"{\fad(600,500)}" if is_indic
+            else r"{\fad(600,500)\t(0,2400,\fscx118\fscy118)}"
+        )
         events.append(_event(0.2, max(intro_s - 0.2, 0.6), "Title", intro_fx + intro_title))
 
     # Scene captions, split per sentence proportionally across each scene's audio.
