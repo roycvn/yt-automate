@@ -6,6 +6,12 @@
 #   - ffmpeg + libass (caption shaping is delegated to klipr; local
 #     assembly / intro / overlays still need ffmpeg)
 #   - fonts-noto for any local Pillow text fallback (Indic + CJK)
+#
+# The local thumbnail engine (src/generate/thumbnail_render.py) needs Pillow with
+# raqm for Indic shaping. Pillow's manylinux wheels bundle libraqm (>=8.2.0), so
+# `pip install Pillow` here is enough; verify post-deploy via GET /api/thumb-options
+# ("raqm": true). If it ever reports false, build Pillow from source against
+# libraqm-dev — make_thumbnail falls back to klipr/libass until then.
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

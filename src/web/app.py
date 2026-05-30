@@ -325,10 +325,15 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
 
 @app.get("/api/thumb-options")
 def api_thumb_options() -> dict:
-    """Template + palette names for the UI pickers (empty = let Claude decide)."""
+    """Template + palette names for the UI pickers (empty = let Claude decide).
+    Also reports which render engine is active — `raqm` must be true for the
+    local Pillow engine; false means this deploy falls back to klipr/libass."""
     from ..generate.thumbnail_render import TEMPLATES
     from ..generate.thumbnail_design import PALETTES
-    return {"templates": list(TEMPLATES), "palettes": list(PALETTES)}
+    from ..generate.thumbnail import raqm_available
+    has_raqm = raqm_available()
+    return {"templates": list(TEMPLATES), "palettes": list(PALETTES),
+            "raqm": has_raqm, "engine": "local" if has_raqm else "libass"}
 
 
 @app.post("/api/thumbnail")
