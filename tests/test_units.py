@@ -225,3 +225,20 @@ def test_display_font_stays_in_script():
     from src.generate.thumbnail_render import font, _FONT_FILES
     f = font("दरवाज़ा", 80, "display", "hi")
     assert "Anton" not in f.path and "Devanagari" in f.path
+
+
+def test_emphasis_renders_without_breaking(tmp_path):
+    from PIL import Image
+    from src.generate.thumbnail_render import render, ThumbDesign
+    from src.generate.thumbnail_design import PALETTES
+    bg = tmp_path / "bg.png"; Image.new("RGB", (1280, 720), (30, 20, 40)).save(bg)
+    out = render(ThumbDesign(title="दरवाज़े के पीछे कौन था", template="cinematic",
+                             emphasis="कौन", lang="hi", **PALETTES["crimson"]),
+                 bg, tmp_path / "e.png")
+    assert Image.open(out).size == (1280, 720)
+
+
+def test_palette_and_template_counts():
+    from src.generate.thumbnail_render import TEMPLATES
+    from src.generate.thumbnail_design import PALETTES
+    assert len(TEMPLATES) == 15 and len(PALETTES) == 24

@@ -32,6 +32,11 @@ PALETTES = {
     "rose_gold":  dict(title_color=(255, 248, 244), accent=(224, 150, 140), stroke=(28, 14, 12), bg_tint=(22, 14, 14)),
     "steel":      dict(title_color=(238, 242, 248), accent=(120, 150, 180), stroke=(10, 14, 20), bg_tint=(14, 18, 24)),
     "lime":       dict(title_color=(250, 255, 240), accent=(170, 230, 30), stroke=(14, 22, 0), glow=(90, 150, 0), bg_tint=(14, 20, 6)),
+    "blush":      dict(title_color=(255, 250, 250), accent=(255, 110, 130), stroke=(34, 10, 14), glow=(200, 50, 80), bg_tint=(24, 12, 14)),
+    "cyber":      dict(title_color=(230, 255, 250), accent=(0, 255, 170), stroke=(0, 20, 18), glow=(0, 160, 120), grad=((0, 255, 200), (60, 130, 255)), bg_tint=(4, 16, 18)),
+    "amber":      dict(title_color=(255, 250, 235), accent=(255, 185, 30), stroke=(34, 22, 0), glow=(180, 120, 0), bg_tint=(22, 16, 4)),
+    "crimson_gold":dict(title_color=(255, 250, 240), accent=(214, 28, 36), stroke=(26, 4, 4), glow=(150, 0, 0), grad=((255, 210, 90), (214, 28, 36))),
+    "slate":      dict(title_color=(240, 244, 250), accent=(90, 110, 140), stroke=(8, 10, 16), bg_tint=(12, 14, 20)),
 }
 
 # mood keyword -> Flux lighting phrase (drives the generated background).
@@ -81,6 +86,7 @@ Pick the most scroll-stopping design. Return JSON:
   "kicker":  "<short top label or '' (e.g. category/series, in {language_name})>",
   "badge":   "<short corner tag or '' (e.g. 'PART 1','NEW','EXCLUSIVE')>",
   "emoji":   "<one emoji that fits, or ''>",
+  "emphasis":"<the single most important word from your title to color-highlight, or '' — must appear verbatim in title>",
   "subject": "<vivid English description of the background subject for image-gen>"
 }}"""
 
@@ -96,6 +102,7 @@ def _coerce(data: dict, *, title: str, subject: str, mood: str, language: str) -
         kicker=(data.get("kicker") or "").strip(),
         badge=(data.get("badge") or "").strip(),
         emoji=(data.get("emoji") or "").strip(),
+        emphasis=(data.get("emphasis") or "").strip(),
         mood=lighting,
         subject=(data.get("subject") or subject).strip(),
         lang=language,

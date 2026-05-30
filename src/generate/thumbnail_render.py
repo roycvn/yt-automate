@@ -208,12 +208,19 @@ def wrap(text, fnt, max_w):
     return out or [text]
 
 
+def _norm(w):
+    return "".join(c for c in w.lower() if c.isalnum() or 'ऀ' <= c <= 'ൿ')
+
+
 def headline(base, text, *, lang=None, weight="bold", x=60, max_w=760,
              max_lines=3, bottom_y=None, top_y=None, max_h=460,
              size_max=150, size_min=52, fill=(255, 255, 255), grad=None,
              stroke="auto", stroke_fill=(0, 0, 0), glow=None, glow_r=22,
-             line_gap=0.06, align="left"):
-    """Auto-sized, word-wrapped headline. Returns (image, (top_y, block_h))."""
+             line_gap=0.06, align="left", emphasis="", emphasis_color=None):
+    """Auto-sized, word-wrapped headline. Returns (image, (top_y, block_h)).
+    `emphasis` words (space-separated) are drawn in `emphasis_color` — words
+    are safe split points for Indic shaping (conjuncts never cross spaces)."""
+    emph = {_norm(w) for w in emphasis.split()} if emphasis else set()
     target = int(max_w * 0.98)
     size = size_max
     while size > size_min:
@@ -259,6 +266,15 @@ def headline(base, text, *, lang=None, weight="bold", x=60, max_w=760,
             ImageDraw.Draw(mask).text((-b[0] + 2, -b[1] + 2), ln, font=f, fill=255)
             base.paste(gradient_layer((gw, gh), grad[0], grad[1]), (xx + b[0] - 2, yy + b[1] - 2), mask)
             d = ImageDraw.Draw(base)
+        elif emph and emphasis_color and any(_norm(w) in emph for w in ln.split()):
+            # draw word-by-word so the emphasized word(s) take the accent color
+            cx = xx
+            words = ln.split(" ")
+            space_w = _w(" ", f)
+            for j, word in enumerate(words):
+                col = emphasis_color if _norm(word) in emph else fill
+                d.text((cx, yy), word, font=f, fill=col, stroke_width=sw, stroke_fill=stroke_fill)
+                cx += _w(word, f) + space_w
         else:
             d.text((xx, yy), ln, font=f, fill=fill, stroke_width=sw, stroke_fill=stroke_fill)
     return base, (y0, block_h)
@@ -307,6 +323,7 @@ class ThumbDesign:
     kicker: str = ""
     badge: str = ""
     emoji: str = ""
+    emphasis: str = ""                     # word(s) in the title to color with accent
     # palette (RGB); accent drives kicker/badge/banner, glow optional
     title_color: tuple = (255, 255, 255)
     accent: tuple = (220, 30, 40)
@@ -332,7 +349,7 @@ def t_cinematic(img, d):
         kf = font(d.kicker, 46, "bold", d.lang)
         tracked(base, d.kicker.upper() if d.lang == "en" else d.kicker, (62, 54), kf,
                 d.accent, spacing=8, stroke=3)
-    base, _ = headline(base, d.title, lang=d.lang, bottom_y=H - 78, x=60, max_w=780,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, bottom_y=H - 78, x=60, max_w=780,
                        fill=d.title_color, grad=d.grad, glow=d.glow,
                        stroke_fill=d.stroke, max_lines=3)
     if d.badge:
@@ -351,7 +368,7 @@ def t_minimal(img, d):
         tracked(base, d.kicker.upper() if d.lang == "en" else d.kicker, (64, y), kf, d.accent, spacing=10)
         hairline(base, 64, y + 60, 90, d.accent, 6)
         y += 96
-    base, _ = headline(base, d.title, lang=d.lang, top_y=y, x=64, max_w=720, weight="bold",
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, top_y=y, x=64, max_w=720, weight="bold",
                        fill=d.title_color, stroke=0, max_lines=4, size_max=128, line_gap=0.12)
     return base
 
@@ -366,7 +383,7 @@ def t_bold_block(img, d):
     if d.badge:
         badge(base, d.badge, (60, 50), lang=d.banner_lang(), size=50,
               fg=d.accent, bg=(255, 255, 255), radius=6)
-    base, _ = headline(base, d.title, lang=d.lang, bottom_y=H - 70, x=70, max_w=740,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, bottom_y=H - 70, x=70, max_w=740,
                        weight="display", fill=(255, 255, 255), stroke=0, max_lines=3)
     _corner_emoji(base, d)
     return base
@@ -378,7 +395,7 @@ def t_neon(img, d):
     if d.kicker:
         badge(base, d.kicker, (60, 48), lang=d.lang, size=50, fg=(0, 255, 200),
               bg=None, stroke=5, stroke_fill=(30, 0, 60))
-    base, _ = headline(base, d.title, lang=d.lang, bottom_y=H - 72, x=60, max_w=800,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, bottom_y=H - 72, x=60, max_w=800,
                        grad=d.grad or ((0, 255, 255), (255, 0, 200)),
                        glow=d.glow or (120, 0, 200), glow_r=24, stroke=8,
                        stroke_fill=(15, 0, 35), max_lines=2, size_max=160)
@@ -394,7 +411,7 @@ def t_luxe(img, d):
     if d.kicker:
         kf = font(d.kicker, 38, "regular", d.lang)
         tracked(base, d.kicker.upper() if d.lang == "en" else d.kicker, (64, 168), kf, gold, spacing=12)
-    base, _ = headline(base, d.title, lang=d.lang, top_y=240, x=64, max_w=700, weight="serif",
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, top_y=240, x=64, max_w=700, weight="serif",
                        fill=(245, 240, 232), stroke=0, max_lines=3, size_max=120, line_gap=0.14)
     hairline(base, 64, H - 120, 220, gold, 4)
     return base
@@ -410,7 +427,7 @@ def t_spotlight(img, d):
     if d.kicker:
         badge(base, d.kicker, (60, 50), lang=d.lang, size=50, fg=d.stroke or (20, 10, 0),
               bg=d.accent, radius=30)
-    base, _ = headline(base, d.title, lang=d.lang, bottom_y=H - 74, x=60, max_w=720,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, bottom_y=H - 74, x=60, max_w=720,
                        fill=d.title_color, glow=d.glow or d.accent, glow_r=22,
                        stroke="auto", stroke_fill=d.stroke, max_lines=3)
     return base
@@ -451,7 +468,7 @@ def t_split(img, d):
     ImageDraw.Draw(base).rectangle([split_x - 9, 0, split_x + 9, H], fill=d.accent + (255,))
     if d.kicker:
         badge(base, d.kicker, (56, 50), lang=d.lang, size=46, fg=(255, 255, 255), bg=d.accent)
-    base, _ = headline(base, d.title, lang=d.lang, x=56, max_w=split_x - 110,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, x=56, max_w=split_x - 110,
                        top_y=150, max_h=420, fill=d.title_color, glow=d.glow,
                        stroke_fill=d.stroke, max_lines=4, size_max=120)
     _corner_emoji(base, d)
@@ -470,7 +487,7 @@ def t_callout(img, d):
     _arrow(base, (int(W * 0.40), int(H * 0.30)), (cx - 140, cy - 40), d.accent, 16)
     if d.kicker:
         badge(base, d.kicker, (56, 48), lang=d.lang, size=46, fg=(255, 255, 255), bg=d.accent)
-    base, _ = headline(base, d.title, lang=d.lang, x=56, max_w=560, bottom_y=H - 80,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, x=56, max_w=560, bottom_y=H - 80,
                        fill=d.title_color, glow=d.glow, stroke_fill=d.stroke, max_lines=3)
     return base
 
@@ -493,7 +510,7 @@ def t_before_after(img, d):
           fg=(255, 255, 255), bg=(70, 80, 90))
     bb = badge(base, lbl_after, (half + 40, 40), lang=_script_of(lbl_after), size=44,
                fg=(20, 20, 20), bg=d.accent)
-    base, _ = headline(base, d.title, lang=d.lang, x=0, max_w=W - 120, align="center",
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, x=0, max_w=W - 120, align="center",
                        bottom_y=H - 60, fill=d.title_color, stroke_fill=d.stroke,
                        glow=d.glow, max_lines=2, size_max=120)
     return base
@@ -513,7 +530,7 @@ def t_magazine(img, d):
     if d.kicker:
         kf = font(d.kicker, 40, "regular", d.lang)
         tracked(base, d.kicker.upper() if d.lang == "en" else d.kicker, (56, 80), kf, d.accent, spacing=12)
-    base, _ = headline(base, d.title, lang=d.lang, weight="serif", top_y=150, x=56,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, weight="serif", top_y=150, x=56,
                        max_w=720, fill=d.title_color, stroke=0, max_lines=4,
                        size_max=118, line_gap=0.14)
     hairline(base, 56, H - 60, W - 112, d.accent, 5)
@@ -559,7 +576,7 @@ def t_duotone(img, d):
     if d.kicker:
         badge(base, d.kicker, (56, 48), lang=d.lang, size=50, fg=(20, 20, 20),
               bg=(255, 255, 255), radius=6)
-    base, _ = headline(base, d.title, lang=d.lang, weight="display", bottom_y=H - 72,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, weight="display", bottom_y=H - 72,
                        x=56, max_w=820, fill=d.title_color, stroke=0, max_lines=3,
                        size_max=170)
     return base
@@ -578,7 +595,7 @@ def t_frame(img, d):
         kf = font(d.kicker, 44, "regular", d.lang)
         tracked(base, d.kicker.upper() if d.lang == "en" else d.kicker,
                 (60, 60), kf, d.accent, spacing=10)
-    base, _ = headline(base, d.title, lang=d.lang, bottom_y=H - 80, x=60, max_w=W - 200,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, bottom_y=H - 80, x=60, max_w=W - 200,
                        align="center", fill=d.title_color, glow=d.glow,
                        stroke_fill=d.stroke, max_lines=3)
     return base
@@ -595,7 +612,7 @@ def t_lower_third(img, d):
     if d.kicker:
         badge(base, d.kicker, (56, bar_y - 78), lang=d.lang, size=46,
               fg=(255, 255, 255), bg=d.accent, radius=4)
-    base, _ = headline(base, d.title, lang=d.lang, top_y=bar_y + 40, x=56, max_w=W - 120,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, top_y=bar_y + 40, x=56, max_w=W - 120,
                        max_h=150, fill=d.title_color, stroke=0, max_lines=2, size_max=96)
     return base
 
@@ -617,7 +634,7 @@ def t_vs(img, d):
     vb = vf.getbbox("VS")
     dd.text((half - (vb[2] - vb[0]) // 2 - vb[0], H // 2 - (vb[3] - vb[1]) // 2 - vb[1]),
             "VS", font=vf, fill=(255, 255, 255))
-    base, _ = headline(base, d.title, lang=d.lang, bottom_y=H - 70, x=0, max_w=W - 120,
+    base, _ = headline(base, d.title, lang=d.lang, emphasis=d.emphasis, emphasis_color=d.accent, bottom_y=H - 70, x=0, max_w=W - 120,
                        align="center", fill=d.title_color, glow=d.glow,
                        stroke_fill=d.stroke, max_lines=2, size_max=110)
     return base
