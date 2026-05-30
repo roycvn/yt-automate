@@ -14,7 +14,7 @@ import os
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance
+from PIL import Image, ImageDraw, ImageFont, ImageFilter, ImageEnhance, ImageOps
 
 from .thumbnail import _script_of  # reuse the Unicode-block script detector
 
@@ -499,6 +499,130 @@ def t_before_after(img, d):
     return base
 
 
+def duotone(img, dark, light):
+    """Map luminance to a two-color ramp (modern poster look)."""
+    g = ImageOps.grayscale(img)
+    return ImageOps.colorize(g, black=dark, white=light).convert("RGB")
+
+
+def t_magazine(img, d):
+    """Editorial: thin top/bottom rules, a kicker label, serif headline."""
+    img = grade(tint(img, d.bg_tint or (14, 14, 16), 0.16), color=1.1, contrast=1.1)
+    base = left_scrim(img, frac=0.64, alpha=200)
+    hairline(base, 56, 60, W - 112, d.accent, 5)
+    if d.kicker:
+        kf = font(d.kicker, 40, "regular", d.lang)
+        tracked(base, d.kicker.upper() if d.lang == "en" else d.kicker, (56, 80), kf, d.accent, spacing=12)
+    base, _ = headline(base, d.title, lang=d.lang, weight="serif", top_y=150, x=56,
+                       max_w=720, fill=d.title_color, stroke=0, max_lines=4,
+                       size_max=118, line_gap=0.14)
+    hairline(base, 56, H - 60, W - 112, d.accent, 5)
+    if d.badge:
+        badge(base, d.badge, (56, H - 130), lang=d.banner_lang(), size=44,
+              fg=(255, 255, 255), bg=d.accent)
+    return base
+
+
+def t_sticker(img, d):
+    """Playful: title in a thick-bordered rounded sticker."""
+    img = grade(img, color=1.45, contrast=1.2)
+    base = bottom_gradient(vignette(img, .7))
+    if d.kicker:
+        badge(base, d.kicker, (56, 48), lang=d.lang, size=48, fg=(20, 20, 20),
+              bg=(255, 255, 255), radius=40)
+    f = font(d.title, 110, "display", d.lang)
+    lines = wrap(d.title, f, 660)
+    while len(lines) > 3 and f.size > 60:
+        f = font(d.title, f.size - 6, "display", d.lang)
+        lines = wrap(d.title, f, 660)
+    asc, desc = f.getmetrics()
+    lh = int((asc + desc) * 1.02)
+    tw = max(_w(l, f) for l in lines)
+    pad = 30
+    x0, y1 = 50, H - 70
+    y0 = y1 - lh * len(lines) - pad * 2
+    d2 = ImageDraw.Draw(base)
+    d2.rounded_rectangle([x0, y0, x0 + tw + pad * 2, y1], radius=28, fill=d.accent + (255,),
+                         outline=(255, 255, 255, 255), width=8)
+    for i, ln in enumerate(lines):
+        d2.text((x0 + pad, y0 + pad + i * lh), ln, font=f, fill=d.title_color,
+                stroke_width=4, stroke_fill=d.stroke)
+    _corner_emoji(base, d)
+    return base
+
+
+def t_duotone(img, d):
+    """Bold duotone wash + heavy headline — music/poster energy."""
+    dk = tuple(min(c, 40) for c in (d.bg_tint or (10, 4, 30)))
+    lt = d.accent
+    base = bottom_gradient(duotone(img, dk, lt).convert("RGBA"), rgb=dk, start=0.25)
+    if d.kicker:
+        badge(base, d.kicker, (56, 48), lang=d.lang, size=50, fg=(20, 20, 20),
+              bg=(255, 255, 255), radius=6)
+    base, _ = headline(base, d.title, lang=d.lang, weight="display", bottom_y=H - 72,
+                       x=56, max_w=820, fill=d.title_color, stroke=0, max_lines=3,
+                       size_max=170)
+    return base
+
+
+def t_frame(img, d):
+    """Premium: full inner border frame with corner ticks, centered-low title."""
+    img = grade(tint(img, d.bg_tint or (12, 12, 16), 0.14), color=1.15, contrast=1.12)
+    base = bottom_gradient(vignette(img, .8))
+    m = 28
+    dd = ImageDraw.Draw(base)
+    dd.rectangle([m, m, W - m, H - m], outline=d.accent + (255,), width=6)
+    for cx, cy in ((m, m), (W - m, m), (m, H - m), (W - m, H - m)):
+        dd.rectangle([cx - 22, cy - 22, cx + 22, cy + 22], outline=(255, 255, 255, 255), width=6)
+    if d.kicker:
+        kf = font(d.kicker, 44, "regular", d.lang)
+        tracked(base, d.kicker.upper() if d.lang == "en" else d.kicker,
+                (60, 60), kf, d.accent, spacing=10)
+    base, _ = headline(base, d.title, lang=d.lang, bottom_y=H - 80, x=60, max_w=W - 200,
+                       align="center", fill=d.title_color, glow=d.glow,
+                       stroke_fill=d.stroke, max_lines=3)
+    return base
+
+
+def t_lower_third(img, d):
+    """Broadcast lower-third: accent bar + dark sub-bar with the title."""
+    img = grade(img, color=1.3, contrast=1.15)
+    base = bottom_gradient(img.convert("RGBA"), start=0.45)
+    bar_y = H - 230
+    dd = ImageDraw.Draw(base)
+    dd.rectangle([0, bar_y, W, bar_y + 14], fill=d.accent + (255,))
+    dd.rectangle([0, bar_y + 14, W, H], fill=(0, 0, 0, 205))
+    if d.kicker:
+        badge(base, d.kicker, (56, bar_y - 78), lang=d.lang, size=46,
+              fg=(255, 255, 255), bg=d.accent, radius=4)
+    base, _ = headline(base, d.title, lang=d.lang, top_y=bar_y + 40, x=56, max_w=W - 120,
+                       max_h=150, fill=d.title_color, stroke=0, max_lines=2, size_max=96)
+    return base
+
+
+def t_vs(img, d):
+    """Comparison: split with a circular VS badge dividing the two sides."""
+    img = grade(img, color=1.35, contrast=1.2)
+    base = img.convert("RGBA")
+    half = W // 2
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).rectangle([0, 0, half, H], fill=(0, 0, 0, 150))
+    base = Image.alpha_composite(base, sh)
+    dd = ImageDraw.Draw(base)
+    dd.rectangle([half - 5, 0, half + 5, H], fill=(255, 255, 255, 255))
+    r = 78
+    dd.ellipse([half - r, H // 2 - r, half + r, H // 2 + r], fill=d.accent + (255,),
+               outline=(255, 255, 255, 255), width=7)
+    vf = font("VS", 92, "display", "en")
+    vb = vf.getbbox("VS")
+    dd.text((half - (vb[2] - vb[0]) // 2 - vb[0], H // 2 - (vb[3] - vb[1]) // 2 - vb[1]),
+            "VS", font=vf, fill=(255, 255, 255))
+    base, _ = headline(base, d.title, lang=d.lang, bottom_y=H - 70, x=0, max_w=W - 120,
+                       align="center", fill=d.title_color, glow=d.glow,
+                       stroke_fill=d.stroke, max_lines=2, size_max=110)
+    return base
+
+
 TEMPLATES = {
     "cinematic": t_cinematic,
     "minimal": t_minimal,
@@ -509,6 +633,12 @@ TEMPLATES = {
     "split": t_split,
     "callout": t_callout,
     "before_after": t_before_after,
+    "magazine": t_magazine,
+    "sticker": t_sticker,
+    "duotone": t_duotone,
+    "frame": t_frame,
+    "lower_third": t_lower_third,
+    "vs": t_vs,
 }
 
 

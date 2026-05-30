@@ -23,6 +23,15 @@ PALETTES = {
     "emerald":    dict(title_color=(245, 255, 248), accent=(0, 200, 120), stroke=(0, 24, 14), glow=(0, 120, 70), bg_tint=(6, 22, 16)),
     "royal":      dict(title_color=(248, 244, 255), accent=(168, 96, 255), stroke=(18, 8, 30), glow=(110, 40, 200), bg_tint=(16, 8, 28)),
     "mono":       dict(title_color=(255, 255, 255), accent=(245, 210, 0), stroke=(0, 0, 0)),
+    "ice":        dict(title_color=(240, 250, 255), accent=(90, 200, 255), stroke=(4, 18, 30), glow=(40, 130, 200), bg_tint=(10, 20, 32)),
+    "noir":       dict(title_color=(255, 255, 255), accent=(235, 235, 235), stroke=(0, 0, 0), bg_tint=(6, 6, 8)),
+    "candy":      dict(title_color=(255, 255, 255), accent=(255, 70, 150), stroke=(30, 0, 25), glow=(255, 60, 140), grad=((255, 90, 170), (90, 200, 255)), bg_tint=(20, 6, 24)),
+    "ember":      dict(title_color=(255, 245, 230), accent=(255, 90, 20), stroke=(30, 8, 0), glow=(200, 60, 0), bg_tint=(22, 10, 6)),
+    "ocean":      dict(title_color=(240, 252, 255), accent=(0, 170, 200), stroke=(0, 18, 26), glow=(0, 90, 130), bg_tint=(6, 18, 28)),
+    "grape":      dict(title_color=(248, 244, 255), accent=(150, 80, 235), stroke=(16, 6, 28), glow=(90, 30, 180), bg_tint=(14, 8, 26)),
+    "rose_gold":  dict(title_color=(255, 248, 244), accent=(224, 150, 140), stroke=(28, 14, 12), bg_tint=(22, 14, 14)),
+    "steel":      dict(title_color=(238, 242, 248), accent=(120, 150, 180), stroke=(10, 14, 20), bg_tint=(14, 18, 24)),
+    "lime":       dict(title_color=(250, 255, 240), accent=(170, 230, 30), stroke=(14, 22, 0), glow=(90, 150, 0), bg_tint=(14, 20, 6)),
 }
 
 # mood keyword -> Flux lighting phrase (drives the generated background).
