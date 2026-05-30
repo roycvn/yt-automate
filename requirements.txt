@@ -6,6 +6,9 @@ google-api-python-client>=2.0
 google-auth>=2.0
 google-auth-oauthlib>=1.0
 elevenlabs>=1.0
+# Pillow: the local thumbnail engine needs raqm (Indic shaping). Pillow wheels
+# bundle it on most platforms; if features.check("raqm") is False in prod,
+# install the libraqm system package — make_thumbnail falls back to libass meanwhile.
 Pillow>=10.0
 fastapi>=0.110
 uvicorn>=0.29

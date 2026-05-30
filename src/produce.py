@@ -129,10 +129,11 @@ def produce(reuse_script: Path | None = None,
         th.hook or script.title, work / "thumb", klipr=klipr, upload_and_sign=upload_and_sign,
         subject=th.subject or tcfg.get("subject", "dramatic subject, strong emotion"),
         banner=tcfg.get("banner_text", ""),
+        kicker=tcfg.get("kicker_text", ""),
         mood=th.mood or tcfg.get("mood", "dramatic cinematic lighting, bold colors"),
         title_color=tcfg.get("title_color", "&H00FFFFFF"),
         accent_color=tcfg.get("accent_color", "&H000000FF"),
-        language=language)
+        language=language, hook=th.hook, niche=channel.get("niche", ""))
     print("thumbnail:", thumb)
 
     description = seo.build_description(script.title, script.title_translit,

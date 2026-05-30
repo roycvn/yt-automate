@@ -323,6 +323,14 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
     return {"job_id": _run_job(job)}
 
 
+@app.get("/api/thumb-options")
+def api_thumb_options() -> dict:
+    """Template + palette names for the UI pickers (empty = let Claude decide)."""
+    from ..generate.thumbnail_render import TEMPLATES
+    from ..generate.thumbnail_design import PALETTES
+    return {"templates": list(TEMPLATES), "palettes": list(PALETTES)}
+
+
 @app.post("/api/thumbnail")
 def api_thumbnail(payload: dict) -> dict:
     cfg = load_config()
@@ -341,10 +349,13 @@ def api_thumbnail(payload: dict) -> dict:
             klipr=klipr, upload_and_sign=upload_and_sign,
             subject=th.subject or tcfg.get("subject", "dramatic subject, strong emotion"),
             banner=tcfg.get("banner_text", ""),
+            kicker=tcfg.get("kicker_text", ""),
             mood=th.mood or tcfg.get("mood", "dramatic cinematic lighting, bold colors"),
             title_color=tcfg.get("title_color", "&H00FFFFFF"),
             accent_color=tcfg.get("accent_color", "&H000000FF"),
-            language=language)
+            language=language, hook=th.hook, niche=channel.get("niche", ""),
+            template=(payload.get("template") or ""),
+            palette=(payload.get("palette") or ""))
         # copy to a stable path the UI can fetch (cache-bust with ts query)
         dest = work / "thumbnail.png"
         dest.write_bytes(out.read_bytes())

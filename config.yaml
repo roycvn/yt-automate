@@ -125,6 +125,7 @@ branding:
 thumbnail:
   # Big two-tone brush-style title + red banner subtitle (reference look).
   banner_text: "BASED ON A TRUE STORY"
+  kicker_text: ""             # optional small accent line above the title (e.g. "डरावनी कहानी")
   subject: "terrified young woman, hand over mouth, tears, wide eyes"
   title_color: "&H00FFFFFF"   # white (ASS BGR)
   accent_color: "&H000000FF"  # red

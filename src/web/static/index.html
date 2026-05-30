@@ -184,6 +184,12 @@
 
   <div class="card">
     <h2><span class="badge">4</span> Thumbnail</h2>
+    <div class="row">
+      <select id="thumbTemplate" style="flex:1" title="Layout template">
+        <option value="">Template: Auto (AI picks)</option></select>
+      <select id="thumbPalette" style="flex:1" title="Color palette">
+        <option value="">Palette: Auto (AI picks)</option></select>
+    </div>
     <button id="genThumb" class="ghost" disabled>🖼 Create / Regenerate</button>
     <div id="thumbStep" class="step"></div>
     <img id="thumbImg" class="thumb hidden" />
@@ -301,9 +307,18 @@ $('genVideo').onclick=async()=>{try{script=JSON.parse($('scriptView').value);}ca
       $('shortDl').href='/api/download_short/'+work;$('shortWrap').classList.remove('hidden');}}
   catch(e){fail($('videoStep'),e.message);}$('genVideo').disabled=false;};
 
+(async()=>{try{const o=await(await fetch('/api/thumb-options')).json();
+  const cap=s=>s.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
+  $('thumbTemplate').insertAdjacentHTML('beforeend',
+    (o.templates||[]).map(t=>`<option value="${t}">${cap(t)}</option>`).join(''));
+  $('thumbPalette').insertAdjacentHTML('beforeend',
+    (o.palettes||[]).map(p=>`<option value="${p}">${cap(p)}</option>`).join(''));
+  }catch(e){}})();
+
 $('genThumb').onclick=async()=>{$('genThumb').disabled=true;
-  try{const{job_id}=await(await fetch('/api/thumbnail',{method:'POST',headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({work})})).json();const res=await poll(job_id,s=>running($('thumbStep'),s));
+  try{const body={work,template:$('thumbTemplate').value,palette:$('thumbPalette').value};
+    const{job_id}=await(await fetch('/api/thumbnail',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)})).json();const res=await poll(job_id,s=>running($('thumbStep'),s));
     ok($('thumbStep'),'thumbnail ready');$('thumbImg').src=res.thumb_url;$('thumbImg').classList.remove('hidden');}
   catch(e){fail($('thumbStep'),e.message);}$('genThumb').disabled=false;};
 

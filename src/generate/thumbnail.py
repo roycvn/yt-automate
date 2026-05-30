@@ -147,11 +147,16 @@ def layout_title(title: str, lang: str, *, col_w: int = TITLE_COL_W,
     [size_min, size_max]) that fits within `col_w` and `max_lines`. Returns the
     ASS-ready text (lines joined with '\\N') and the chosen font size."""
     target = int(col_w * 0.96)        # safety margin vs libass metric drift
+    block_h = H - 130 - 150           # vertical budget between top reserve & banner
     size = size_max
     while size > size_min:
         fnt = _measure_font(lang, size)
         lines = _wrap(title, fnt, target)
-        if len(lines) <= max_lines and all(_text_w(l, fnt) <= target for l in lines):
+        asc, desc = fnt.getmetrics()
+        lh = int((asc + desc) * 1.04)
+        if (len(lines) <= max_lines
+                and all(_text_w(l, fnt) <= target for l in lines)
+                and len(lines) * lh <= block_h):
             break
         size -= 4
     fnt = _measure_font(lang, size)
@@ -196,17 +201,135 @@ def build_thumb_ass(title: str, *, banner: str = "", kicker: str = "",
         events="\n".join(events))
 
 
-def make_thumbnail(title: str, work: Path, *, klipr, upload_and_sign,
+def _ass_bgr_to_rgb(c: str) -> tuple[int, int, int]:
+    """'&H00BBGGRR' (ASS, BGR) -> (R, G, B)."""
+    h = c.replace("&H", "").replace("&", "")
+    h = h[-6:].rjust(6, "0")
+    bb, gg, rr = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    return rr, gg, bb
+
+
+def preview_thumbnail(title: str, out: Path, *, banner: str = "", kicker: str = "",
+                      title_color: str = "&H00FFFFFF",
+                      accent_color: str = "&H000000FF", language: str = "hi",
+                      bg: Path | None = None) -> Path:
+    """Offline PIL approximation of the libass layout (no klipr/Flux needed).
+    Useful for eyeballing wrap/size/placement before a real render."""
+    from PIL import Image, ImageDraw
+    title_lang = _script_of(title) if _script_of(title) != "en" else language
+    wrapped, size = layout_title(title, title_lang)
+    lines = wrapped.split("\\N")
+    n = len(lines)
+    tmv = 130 if kicker else 90
+    if n >= 3:
+        tmv = max(60, tmv - (n - 2) * 30)
+
+    img = (Image.open(bg).convert("RGB").resize((W, H)) if bg and Path(bg).exists()
+           else Image.new("RGB", (W, H), (28, 24, 30)))
+    d = ImageDraw.Draw(img)
+    tc, ac = _ass_bgr_to_rgb(title_color), _ass_bgr_to_rgb(accent_color)
+
+    if kicker:
+        kf = _measure_font(_script_of(kicker), KICKER_SIZE)
+        d.text((50, 48), kicker, font=kf, fill=ac, stroke_width=3,
+               stroke_fill=(0, 0, 0))
+    tf = _measure_font(title_lang, size)
+    asc, desc = tf.getmetrics()
+    lh = int((asc + desc) * 1.04)
+    for i, ln in enumerate(lines):
+        d.text((50, tmv + i * lh), ln, font=tf, fill=tc, stroke_width=8,
+               stroke_fill=(0, 0, 0))
+    if banner:
+        bf = _measure_font(_script_of(banner), 56)
+        bb = bf.getbbox(banner)
+        bw, bh = bb[2] - bb[0], bb[3] - bb[1]
+        d.rectangle([40, H - 70 - bh - 24, 60 + bw + 20, H - 46], fill=ac)
+        d.text((50, H - 70 - bh - 12), banner, font=bf, fill=(255, 255, 255))
+    out.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out, "PNG")
+    return out
+
+
+_LANG_NAME = {"hi": "Hindi", "te": "Telugu", "ta": "Tamil", "kn": "Kannada",
+              "ml": "Malayalam", "bn": "Bengali", "gu": "Gujarati", "mr": "Marathi",
+              "en": "English"}
+
+
+def raqm_available() -> bool:
+    """Local rich rendering needs raqm for Indic shaping. Linux/prod Pillow
+    wheels often lack libraqm — fall back to the klipr/libass path if so."""
+    try:
+        from PIL import features
+        return bool(features.check("raqm"))
+    except Exception:
+        return False
+
+
+def make_thumbnail(title: str, work: Path, *, klipr=None, upload_and_sign=None,
                    subject: str = "dramatic subject, strong emotion",
                    banner: str = "",
                    kicker: str = "",
                    mood: str = "dramatic cinematic lighting, bold colors",
                    title_color: str = "&H00FFFFFF",
                    accent_color: str = "&H000000FF",
-                   language: str = "hi") -> Path:
-    """Produce a 1280x720 thumbnail with a wrapped auto-sized title, an optional
-    kicker line, and an optional banner burned in.
-    `klipr` is a KliprClient; `upload_and_sign(path, key)` -> klipr-fetchable URL."""
+                   language: str = "hi",
+                   hook: str = "",
+                   niche: str = "",
+                   template: str = "",
+                   palette: str = "",
+                   engine: str | None = None) -> Path:
+    """Produce a 1280x720 thumbnail.
+
+    Primary engine ('local'): Claude picks a design (template/palette/mood/text),
+    Flux renders a background, and a Pillow template composites a modern design.
+    Fallback engine ('libass'): the klipr ASS burn-in path (needs klipr +
+    upload_and_sign) — used automatically when raqm/local rendering is
+    unavailable. Force one with engine='local' | 'libass'."""
+    use = engine or ("local" if raqm_available() else "libass")
+    if use == "local":
+        try:
+            return _make_thumbnail_local(
+                title, work, subject=subject, banner=banner, kicker=kicker,
+                mood=mood, language=language, hook=hook, niche=niche,
+                template=template, palette=palette)
+        except Exception as e:
+            if klipr is None or upload_and_sign is None:
+                raise
+            print(f"thumbnail: local render failed ({e}); falling back to libass")
+    return _make_thumbnail_libass(
+        title, work, klipr=klipr, upload_and_sign=upload_and_sign, subject=subject,
+        banner=banner, kicker=kicker, mood=mood, title_color=title_color,
+        accent_color=accent_color, language=language)
+
+
+def _make_thumbnail_local(title: str, work: Path, *, subject, banner, kicker,
+                          mood, language, hook, niche, template="", palette="") -> Path:
+    from .thumbnail_design import choose_design, apply_palette
+    from .thumbnail_render import render, TEMPLATES
+
+    work.mkdir(parents=True, exist_ok=True)
+    design = choose_design(
+        title=title, hook=hook or title, subject=subject, mood=mood,
+        niche=niche, language=language,
+        language_name=_LANG_NAME.get(language, "Hindi"))
+    # explicit overrides from the caller/UI/config win over Claude's choices
+    if template in TEMPLATES:
+        design.template = template
+    if palette:
+        apply_palette(design, palette)
+    if kicker:
+        design.kicker = kicker
+    if banner:
+        design.badge = banner
+
+    bg = generate_image(THUMB_BG_PROMPT_T.format(subject=design.subject, mood=design.mood),
+                        work / "thumb_bg.png", aspect_ratio="16:9")
+    return render(design, bg, work / "thumbnail.png")
+
+
+def _make_thumbnail_libass(title: str, work: Path, *, klipr, upload_and_sign,
+                           subject, banner, kicker, mood, title_color,
+                           accent_color, language) -> Path:
     import asyncio
     import time
     import httpx
