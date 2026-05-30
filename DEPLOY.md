@@ -77,6 +77,18 @@ curl -H "Authorization: Bearer $WORKER_TOKEN" \
 
 Should return JSON with `profiles`, `lang_defaults`, etc.
 
+```
+curl -H "Authorization: Bearer $WORKER_TOKEN" \
+     https://yta-production-xxxx.up.railway.app/api/thumb-options
+```
+
+Confirms the thumbnail engine. Look for `"engine": "local"` (and
+`"raqm": true`) — the local Pillow design engine is active. If it shows
+`"engine": "libass"`, this image's Pillow lacks raqm shaping and thumbnails
+fall back to the klipr/libass path; rebuild Pillow against `libraqm-dev` in
+the Dockerfile to enable the local engine. The response also lists the
+available `templates` and `palettes` for the thumbnail picker.
+
 Now open `klipr.in/dashboard/yt-automate`, fill the form, click
 **Generate**. The Klipr UI POSTs to the Railway worker, polls for
 status, and shows the finished video — no other moving parts.
