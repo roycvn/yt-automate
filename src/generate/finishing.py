@@ -10,7 +10,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from .assemble import assemble
+from .assemble import assemble, assemble_videos
 from .captions import build_ass, wav_duration
 from .images import generate_image
 
@@ -294,13 +294,21 @@ def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path]
                             work: Path, *, intro_title: str, outro_text: str,
                             music_mode: str = "generate", music_path: Path | None = None,
                             music_intensity: float = 0.32,
-                            intro_mode: str = "generate", intro_path: Path | None = None
+                            intro_mode: str = "generate", intro_path: Path | None = None,
+                            language: str = "hi",
+                            scene_videos: list[Path] | None = None,
                             ) -> tuple[Path, str, dict]:
     """Produce the captionless finished video (intro+body+outro+music) and the
     ASS text to burn on it. `music_mode`/`intro_mode`: generate|upload|none.
+    When `scene_videos` is given, the body is built from generated motion clips
+    (assemble_videos) instead of ken-burns over still `images`.
     Returns (video_path, ass_text)."""
     work.mkdir(parents=True, exist_ok=True)
-    body = assemble(images, audios, work / "body.mp4", work / "body_work", W, H)
+    if scene_videos:
+        body = assemble_videos(scene_videos, audios, work / "body.mp4",
+                               work / "body_work", W, H)
+    else:
+        body = assemble(images, audios, work / "body.mp4", work / "body_work", W, H)
     outro_bg = generate_image(OUTRO_BG_PROMPT, work / "outro_bg.png", aspect_ratio="16:9")
     outro = _card(work / "outro.mp4", OUTRO_S, image=outro_bg)
 
@@ -323,6 +331,7 @@ def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path]
     finished = _mix_music(joined, music, work / "finished_nocaps.mp4", music_intensity) if music else joined
 
     ass = build_ass(scenes, audios, intro_s=intro_s, outro_s=OUTRO_S,
-                    intro_title=ass_title, outro_text=outro_text)
+                    intro_title=ass_title, outro_text=outro_text,
+                    language=language)
     return finished, ass, {"intro_s": intro_s, "body_dur": body_dur,
                            "body_end": intro_s + body_dur}

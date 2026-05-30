@@ -9,7 +9,9 @@ Endpoints (base = https://klipr.in/api/batch), all authenticated with
                                                               -> 202 {job_id}
   POST /caption-burn {source_url, ass, source_mime?}          -> {output_key, download_url}
   POST /watermark    {source_url, filename?}                  -> streamed mp4 bytes
-  GET  /jobs/{id}?kind=auto_clip|dub|caption_render          -> {job, download_url}
+  POST /video        {mode, style, prompt, image_url?, aspect_ratio,
+                      duration_seconds}                        -> {video_id, status}
+  GET  /jobs/{id}?kind=auto_clip|dub|caption_render|video_gen -> {job, download_url}
 
 Sources are URLs, not local files: `source_type="youtube"` with a YouTube
 `source_url`, or `source_type="upload"` with a Firebase Storage
@@ -25,7 +27,9 @@ from typing import Literal
 import httpx
 
 SourceType = Literal["youtube", "upload"]
-JobKind = Literal["auto_clip", "dub", "caption_render"]
+JobKind = Literal["auto_clip", "dub", "caption_render", "video_gen"]
+VideoStyle = Literal["2d", "3d", "real"]
+VideoMode = Literal["text", "image"]
 TERMINAL = {"ready", "failed"}
 
 
@@ -259,6 +263,52 @@ class KliprClient:
                     self._raise_for(r)
                 with open(dest, "wb") as f:
                     async for chunk in r.aiter_bytes():
+                        f.write(chunk)
+        return dest
+
+    # ------------------------------------------------------------------ ai video
+    async def generate_video(self, prompt: str, dest: Path, *,
+                             mode: VideoMode = "text",
+                             style: VideoStyle = "2d",
+                             image_url: str | None = None,
+                             aspect_ratio: str = "16:9",
+                             duration_seconds: int = 5) -> Path:
+        """Generate an AI video (fal.ai via klipr) and stream it to `dest`.
+
+        The klipr /video route processes generation synchronously inside its
+        300s budget and responds with {video_id, status: "ready"}, so this POST
+        can take a few minutes — we give it a 310s read timeout. We then fetch
+        the signed download URL via get_job() and stream the mp4 to disk.
+        """
+        if mode == "image" and not image_url:
+            raise ValueError("image mode requires image_url")
+        payload: dict = {"mode": mode, "style": style, "prompt": prompt,
+                         "aspect_ratio": aspect_ratio,
+                         "duration_seconds": int(duration_seconds)}
+        if image_url:
+            payload["image_url"] = image_url
+
+        timeout = httpx.Timeout(connect=15.0, read=310.0, write=60.0, pool=15.0)
+
+        async def call() -> httpx.Response:
+            async with httpx.AsyncClient(timeout=timeout) as http:
+                return await http.post(f"{self.base_url}/video", json=payload,
+                                        headers=self._headers)
+        r = await _retry_net(call, label="klipr video")
+        self._raise_for(r)
+        video_id = r.json()["video_id"]
+
+        job = await self.get_job(video_id, "video_gen")
+        if job.status != "ready" or not job.download_url:
+            raise KliprError(f"video {video_id} not ready: "
+                             f"{job.status} {job.error_message}")
+
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        async with httpx.AsyncClient(timeout=600) as http:
+            async with http.stream("GET", job.download_url) as resp:
+                resp.raise_for_status()
+                with open(dest, "wb") as f:
+                    async for chunk in resp.aiter_bytes():
                         f.write(chunk)
         return dest
 

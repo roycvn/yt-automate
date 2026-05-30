@@ -69,6 +69,17 @@ watermark:
   opacity: 0.6
   scale: 0.12              # fraction of video width
 
+# How scene visuals are produced.
+#   mode: image -> Flux still per scene + ken-burns zoom (default, cheapest)
+#         video -> fal.ai AI motion clip per scene (via klipr /api/batch/video)
+#   style: 2d | 3d | real  (only used when mode == video)
+#   clip_seconds: length of each generated clip; it's looped/trimmed to the
+#                 scene's narration duration during assembly (3–10).
+generation:
+  mode: image
+  style: 2d
+  clip_seconds: 5
+
 clip:
   count: 8
   max_duration_s: 60

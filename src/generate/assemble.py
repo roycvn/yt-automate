@@ -61,6 +61,10 @@ def assemble(images: list[Path], audios: list[Path], out: Path,
         _scene_clip(img, aud, clip, width, height)
         clips.append(clip)
 
+    return _concat_clips(clips, out, work)
+
+
+def _concat_clips(clips: list[Path], out: Path, work: Path) -> Path:
     concat_list = work / "concat.txt"
     concat_list.write_text("".join(f"file '{c.resolve()}'\n" for c in clips))
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -72,3 +76,46 @@ def assemble(images: list[Path], audios: list[Path], out: Path,
         str(out),
     ])
     return out
+
+
+def _scene_video_clip(video: Path, audio: Path, out: Path,
+                      width: int = 1920, height: int = 1080) -> Path:
+    """One scene: a generated video clip looped/trimmed to the narration's
+    duration, scaled+padded to the canvas, with the narration as audio.
+
+    The generated clip is usually shorter than the narration, so we loop it
+    (-stream_loop) and trim to the audio length. The generated clip's own
+    audio (if any) is dropped — narration is the only audio track."""
+    dur = max(_wav_duration(audio), 1.0)
+    vf = (
+        f"scale={width}:{height}:force_original_aspect_ratio=increase,"
+        f"crop={width}:{height},fps={FPS},format=yuv420p"
+    )
+    _run([
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-stream_loop", "-1", "-i", str(video),
+        "-i", str(audio),
+        "-map", "0:v:0", "-map", "1:a:0",
+        "-vf", vf,
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+        "-c:a", "aac", "-b:a", "160k",
+        "-t", f"{dur:.3f}", "-shortest",
+        str(out),
+    ])
+    return out
+
+
+def assemble_videos(videos: list[Path], audios: list[Path], out: Path,
+                    work: Path, width: int = 1920, height: int = 1080) -> Path:
+    """Build per-scene clips from generated videos + narration, and concatenate
+    into the final video at `out`. Drop-in replacement for assemble() when the
+    channel uses AI motion video instead of still images."""
+    if len(videos) != len(audios):
+        raise ValueError("videos and audios must be 1:1 per scene")
+    work.mkdir(parents=True, exist_ok=True)
+    clips: list[Path] = []
+    for i, (vid, aud) in enumerate(zip(videos, audios)):
+        clip = work / f"clip_{i:02d}.mp4"
+        _scene_video_clip(vid, aud, clip, width, height)
+        clips.append(clip)
+    return _concat_clips(clips, out, work)
