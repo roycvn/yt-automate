@@ -11,8 +11,9 @@ import subprocess
 from pathlib import Path
 
 from .assemble import assemble, assemble_videos
-from .captions import build_ass, wav_duration
+from .captions import _font_for, build_ass, wav_duration
 from .images import generate_image
+from .title_png import render_title_png
 
 INTRO_BG_PROMPT = (
     "Cinematic 2D animated horror title-card background, pitch-dark eerie "
@@ -36,10 +37,13 @@ def _run(cmd: list[str]) -> None:
     subprocess.run(cmd, check=True, capture_output=True)
 
 
-def _card(out: Path, dur: float, image: Path | None = None) -> Path:
+def _card(out: Path, dur: float, image: Path | None = None,
+          title_overlay: Path | None = None) -> Path:
     """A silent video card of length `dur`. With `image`, a cinematic slow-zoom
-    over the artwork; otherwise a flat dark background. Title text is burned
-    later via ASS."""
+    over the artwork; otherwise a flat dark background. With `title_overlay`
+    (a transparent PNG), overlays it centered on top of the zoomed image with
+    a fade — used for Indic titles where libass shaping is unreliable, so we
+    pre-render the title with Pillow+RAQM and overlay it as bitmap."""
     frames = int(dur * FPS)
     if image is not None:
         vf = (
@@ -48,6 +52,27 @@ def _card(out: Path, dur: float, image: Path | None = None) -> Path:
             f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={W}x{H}:fps={FPS},"
             f"format=yuv420p"
         )
+        if title_overlay is not None:
+            # Two-input filter graph: zoom the bg, then overlay the title PNG
+            # with a fade in/out so it matches the look of the ASS \\fad path.
+            fade_out_start = max(dur - 0.5, 0.6)
+            filter_complex = (
+                f"[0:v]{vf}[bg];"
+                f"[1:v]format=rgba,fade=in:st=0:d=0.6:alpha=1,"
+                f"fade=out:st={fade_out_start:.2f}:d=0.5:alpha=1[t];"
+                f"[bg][t]overlay=(W-w)/2:(H-h)/2:format=auto[v]"
+            )
+            _run([
+                "ffmpeg", "-y", "-loglevel", "error",
+                "-loop", "1", "-i", str(image),
+                "-loop", "1", "-i", str(title_overlay),
+                "-f", "lavfi", "-i", "anullsrc=r=44100:cl=stereo",
+                "-filter_complex", filter_complex,
+                "-map", "[v]", "-map", "2:a", "-t", f"{dur}",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
+                "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "160k", str(out),
+            ])
+            return out
         _run([
             "ffmpeg", "-y", "-loglevel", "error",
             "-loop", "1", "-i", str(image),
@@ -316,8 +341,24 @@ def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path]
     intro_clip, intro_s, ass_title = None, 0.0, ""
     if intro_mode == "generate":
         intro_bg = generate_image(INTRO_BG_PROMPT, work / "intro_bg.png", aspect_ratio="16:9")
-        intro_clip = _card(work / "intro.mp4", INTRO_S, image=intro_bg)
-        intro_s, ass_title = INTRO_S, intro_title
+        # For Indic scripts pre-render the title as a transparent PNG via
+        # Pillow+RAQM and overlay it bitmap-style. libass + HarfBuzz still
+        # mis-shapes Telugu/Devanagari conjuncts on animated title events
+        # (and a static event with no \\t() is too plain). Latin titles keep
+        # the ASS path because RAQM gives them no benefit and they want the
+        # \\fad/\\t bounce.
+        is_indic = _font_for(language) != "Noto Sans"
+        title_overlay: Path | None = None
+        if is_indic and intro_title:
+            title_overlay = render_title_png(
+                intro_title, work / "title.png", language=language
+            )
+        intro_clip = _card(
+            work / "intro.mp4", INTRO_S, image=intro_bg, title_overlay=title_overlay,
+        )
+        intro_s = INTRO_S
+        # Skip the ASS Title event when we've already burned the PNG overlay.
+        ass_title = "" if is_indic else intro_title
     elif intro_mode == "upload" and intro_path and Path(intro_path).exists():
         intro_clip = _normalize_intro(Path(intro_path), work / "intro.mp4")
         intro_s = _probe_duration(intro_clip)
