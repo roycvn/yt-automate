@@ -258,14 +258,28 @@ def headline(base, text, *, lang=None, weight="bold", x=60, max_w=760,
     for i, ln in enumerate(lines):
         xx, yy = lx(ln), y0 + i * lh
         if grad:
-            if sw:
-                d.text((xx, yy), ln, font=f, fill=None, stroke_width=sw, stroke_fill=stroke_fill)
-            b = f.getbbox(ln)
-            gw, gh = b[2] - b[0] + 4, b[3] - b[1] + 4
-            mask = Image.new("L", (gw, gh), 0)
-            ImageDraw.Draw(mask).text((-b[0] + 2, -b[1] + 2), ln, font=f, fill=255)
-            base.paste(gradient_layer((gw, gh), grad[0], grad[1]), (xx + b[0] - 2, yy + b[1] - 2), mask)
-            d = ImageDraw.Draw(base)
+            # segments to render: emphasized words go solid-accent, the rest
+            # take the gradient fill. Without emphasis it's one whole-line segment.
+            space_w = _w(" ", f)
+            if emph and emphasis_color and any(_norm(w) in emph for w in ln.split()):
+                segs, cx = [], xx
+                for word in ln.split(" "):
+                    segs.append((cx, word, _norm(word) in emph))
+                    cx += _w(word, f) + space_w
+            else:
+                segs = [(xx, ln, False)]
+            for sx, seg, is_emph in segs:
+                if sw:
+                    d.text((sx, yy), seg, font=f, fill=None, stroke_width=sw, stroke_fill=stroke_fill)
+                if is_emph:
+                    d.text((sx, yy), seg, font=f, fill=emphasis_color)
+                else:
+                    b = f.getbbox(seg)
+                    gw, gh = b[2] - b[0] + 4, b[3] - b[1] + 4
+                    mask = Image.new("L", (gw, gh), 0)
+                    ImageDraw.Draw(mask).text((-b[0] + 2, -b[1] + 2), seg, font=f, fill=255)
+                    base.paste(gradient_layer((gw, gh), grad[0], grad[1]), (sx + b[0] - 2, yy + b[1] - 2), mask)
+                d = ImageDraw.Draw(base)
         elif emph and emphasis_color and any(_norm(w) in emph for w in ln.split()):
             # draw word-by-word so the emphasized word(s) take the accent color
             cx = xx

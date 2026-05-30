@@ -312,14 +312,16 @@ def _make_thumbnail_local(title: str, work: Path, *, subject, banner, kicker,
         title=title, hook=hook or title, subject=subject, mood=mood,
         niche=niche, language=language,
         language_name=_LANG_NAME.get(language, "Hindi"))
-    # explicit overrides from the caller/UI/config win over Claude's choices
+    # explicit UI picks (template/palette) win over Claude's choices…
     if template in TEMPLATES:
         design.template = template
     if palette:
         apply_palette(design, palette)
-    if kicker:
+    # …but config kicker/banner are only *fallbacks*: keep Claude's auto-chosen
+    # kicker/badge when it picked one, so the per-video design isn't flattened.
+    if kicker and not design.kicker:
         design.kicker = kicker
-    if banner:
+    if banner and not design.badge:
         design.badge = banner
 
     bg = generate_image(THUMB_BG_PROMPT_T.format(subject=design.subject, mood=design.mood),
