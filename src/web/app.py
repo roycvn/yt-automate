@@ -220,6 +220,9 @@ def api_script(payload: dict) -> dict:
 async def api_generate(script: str = Form(...), music_mode: str = Form("generate"),
                        music_intensity: float = Form(0.32), channel: str = Form("{}"),
                        make_shorts: bool = Form(False), bottom_logo: str = Form("default"),
+                       bottom_logo_scale: float = Form(0.0),
+                       generation_mode: str = Form(""),
+                       generation_style: str = Form(""),
                        intro_mode: str = Form("generate"),
                        muted: bool = Form(False), mute_seconds: int = Form(5),
                        music_file: UploadFile | None = File(None),
@@ -227,6 +230,14 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
                        intro_file: UploadFile | None = File(None)) -> dict:
     cfg = load_config()
     channel = _resolve_channel(json.loads(channel or "{}"))
+    # Per-request overrides for config — keep the loaded cfg dict local so we
+    # don't bleed one user's choice into another's render. `generation_mode`
+    # picks between Flux still + ken-burns ("image") and fal.ai per-scene
+    # clips ("video"); `generation_style` is the fal model variant.
+    if generation_mode:
+        cfg.setdefault("generation", {})["mode"] = generation_mode
+    if generation_style:
+        cfg.setdefault("generation", {})["style"] = generation_style
     story = _script_from_dict(json.loads(script))
     work = WORK_ROOT / f"job-{int(time.time())}-{uuid.uuid4().hex[:6]}"
     work.mkdir(parents=True, exist_ok=True)
@@ -271,7 +282,8 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
             outro_text=channel.get("outro_text", f"{channel.get('name','Subscribe')} 🔔"),
             music_mode=music_mode, music_path=music_path, music_intensity=music_intensity,
             intro_mode=intro_mode, intro_path=intro_path,
-            language=channel.get("language", "hi"))
+            language=channel.get("language", "hi"),
+            music_mood=getattr(story.thumbnail, "mood", "") or "")
         step("burning captions (klipr)")
         klipr = KliprClient_from_env()
         url = upload_and_sign(finished, f"web/{work.name}.mp4")
@@ -294,6 +306,8 @@ async def api_generate(script: str = Form(...), music_mode: str = Form("generate
                     continue
                 if bottom_logo == "upload" and custom_logo is not None:
                     entry["path"] = str(custom_logo)
+                if bottom_logo_scale and bottom_logo_scale > 0:
+                    entry["scale"] = float(bottom_logo_scale)
                 entry["start"] = meta["intro_s"]
                 entry["end"] = meta["body_end"]
             items.append(entry)

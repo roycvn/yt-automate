@@ -92,17 +92,58 @@ def _card(out: Path, dur: float, image: Path | None = None,
     return out
 
 
-def _drone(out: Path, dur: float) -> Path:
-    """Original low ambient tension bed (two detuned low sines + tremolo + lowpass)."""
-    _run([
-        "ffmpeg", "-y", "-loglevel", "error",
+def _drone(out: Path, dur: float, mood: str = "") -> Path:
+    """Synth a mood-fitting ambient bed via ffmpeg's lavfi. The 5 presets cover
+    the moods Claude actually emits in story.thumbnail.mood. We pick by simple
+    keyword match on `mood.lower()`; unknown moods get the original tense
+    drone (safe default for the horror catalogue we started with)."""
+    m = (mood or "").lower()
+
+    def emit(filters_args: list[str]) -> Path:
+        _run([
+            "ffmpeg", "-y", "-loglevel", "error", *filters_args,
+            "-t", f"{dur}", str(out),
+        ])
+        return out
+
+    # uplifting / motivational — bright pad, two stacked higher sines, no
+    # tremolo so it stays steady.
+    if any(k in m for k in ("uplift", "motivat", "inspir", "hope", "bright")):
+        return emit([
+            "-f", "lavfi", "-i", f"sine=frequency=220:duration={dur}",
+            "-f", "lavfi", "-i", f"sine=frequency=330:duration={dur}",
+            "-filter_complex", "[0][1]amix=inputs=2,lowpass=f=2000,volume=0.45",
+        ])
+    # calm / soft / gentle — single low sine, heavy lowpass for warmth.
+    if any(k in m for k in ("calm", "soft", "gentle", "warm", "serene")):
+        return emit([
+            "-f", "lavfi", "-i", f"sine=frequency=110:duration={dur}",
+            "-filter_complex", "[0]lowpass=f=400,volume=0.5",
+        ])
+    # dramatic / cinematic / epic — three stacked sines + slow tremolo swell.
+    if any(k in m for k in ("dramatic", "cinematic", "epic", "grand")):
+        return emit([
+            "-f", "lavfi", "-i", f"sine=frequency=55:duration={dur}",
+            "-f", "lavfi", "-i", f"sine=frequency=110:duration={dur}",
+            "-f", "lavfi", "-i", f"sine=frequency=165:duration={dur}",
+            "-filter_complex",
+            "[0][1][2]amix=inputs=3,tremolo=f=0.10:d=0.4,lowpass=f=900,volume=0.6",
+        ])
+    # energetic / hype / fast — faster tremolo on higher sines.
+    if any(k in m for k in ("energ", "hype", "fast", "driving", "intense")):
+        return emit([
+            "-f", "lavfi", "-i", f"sine=frequency=82.5:duration={dur}",
+            "-f", "lavfi", "-i", f"sine=frequency=165:duration={dur}",
+            "-filter_complex",
+            "[0][1]amix=inputs=2,tremolo=f=0.45:d=0.5,lowpass=f=1200,volume=0.5",
+        ])
+    # tense / horror / dark / scary (default — the original drone).
+    return emit([
         "-f", "lavfi", "-i", f"sine=frequency=55:duration={dur}",
         "-f", "lavfi", "-i", f"sine=frequency=82.5:duration={dur}",
         "-filter_complex",
         "[0][1]amix=inputs=2,tremolo=f=0.15:d=0.6,lowpass=f=180,volume=0.9",
-        "-t", f"{dur}", str(out),
     ])
-    return out
 
 
 def _probe_duration(path: Path) -> float:
@@ -151,14 +192,15 @@ def _loop_to_duration(src: Path, out: Path, dur: float) -> Path:
 
 
 def prepare_music(work: Path, total: float, *, mode: str = "generate",
-                  path: Path | None = None) -> Path | None:
+                  path: Path | None = None, mood: str = "") -> Path | None:
     """Return a music-bed wav for the whole video, per `mode`:
-    'generate' (ambient drone), 'upload' (loop/trim `path`), 'none' (no bed)."""
+    'generate' (ambient drone matched to `mood`), 'upload' (loop/trim `path`),
+    'none' (no bed)."""
     if mode == "none":
         return None
     if mode == "upload" and path and Path(path).exists():
         return _loop_to_duration(Path(path), work / "music.wav", total)
-    return _drone(work / "music.wav", total)
+    return _drone(work / "music.wav", total, mood=mood)
 
 
 def _concat(clips: list[Path], out: Path) -> Path:
@@ -322,6 +364,7 @@ def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path]
                             intro_mode: str = "generate", intro_path: Path | None = None,
                             language: str = "hi",
                             scene_videos: list[Path] | None = None,
+                            music_mood: str = "",
                             ) -> tuple[Path, str, dict]:
     """Produce the captionless finished video (intro+body+outro+music) and the
     ASS text to burn on it. `music_mode`/`intro_mode`: generate|upload|none.
@@ -368,7 +411,7 @@ def build_finished_skeleton(scenes: list, images: list[Path], audios: list[Path]
 
     body_dur = sum(max(wav_duration(a), 1.0) for a in audios)
     total = intro_s + body_dur + OUTRO_S
-    music = prepare_music(work, total, mode=music_mode, path=music_path)
+    music = prepare_music(work, total, mode=music_mode, path=music_path, mood=music_mood)
     finished = _mix_music(joined, music, work / "finished_nocaps.mp4", music_intensity) if music else joined
 
     ass = build_ass(scenes, audios, intro_s=intro_s, outro_s=OUTRO_S,

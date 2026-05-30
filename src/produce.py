@@ -96,7 +96,8 @@ def produce(reuse_script: Path | None = None,
     finished, ass, meta = build_finished_skeleton(
         script.scenes, images, audios, work / "finish",
         intro_title=script.title, outro_text=outro, language=language,
-        scene_videos=scene_videos)
+        scene_videos=scene_videos,
+        music_mood=getattr(script.thumbnail, "mood", "") or "")
     url = upload_and_sign(finished, f"produce/{work.name}.mp4")
     res = asyncio.run(klipr.caption_burn(url, ass, watermark=False))
     import httpx
